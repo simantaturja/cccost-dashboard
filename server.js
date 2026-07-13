@@ -7,7 +7,14 @@ const { parseSession, buildResponse, mergeSessionAggregates, buildReport } = req
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const PORT = process.env.PORT || 3456;
-const INDEX_HTML = path.join(__dirname, 'public', 'index.html');
+const DIST_DIR = path.join(__dirname, 'web', 'dist');
+const INDEX_HTML = path.join(DIST_DIR, 'index.html');
+const MIME = {
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.html': 'text/html; charset=utf-8',
+};
 
 function loadConfig() {
   try {
@@ -108,11 +115,31 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/') {
     fs.readFile(INDEX_HTML, (err, buf) => {
       if (err) {
-        res.writeHead(500);
-        res.end('index.html missing');
+        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('web/dist/index.html not found — run `npm run build` first.');
         return;
       }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(buf);
+    });
+    return;
+  }
+  if (url.pathname.startsWith('/assets/')) {
+    const rel = path.normalize(url.pathname).replace(/^(\.\.[/\\])+/, '');
+    const filePath = path.join(DIST_DIR, rel);
+    if (!filePath.startsWith(path.join(DIST_DIR, 'assets'))) {
+      res.writeHead(404);
+      res.end('not found');
+      return;
+    }
+    fs.readFile(filePath, (err, buf) => {
+      if (err) {
+        res.writeHead(404);
+        res.end('not found');
+        return;
+      }
+      const type = MIME[path.extname(filePath)] || 'application/octet-stream';
+      res.writeHead(200, { 'content-type': type });
       res.end(buf);
     });
     return;

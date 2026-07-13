@@ -6,7 +6,19 @@ transcripts, merged into their parent session.
 
 ## Run
 
+    npm run build    # builds the React frontend (web/) to web/dist
     npm start        # http://localhost:3456
+
+The frontend is a Vite + React app in `web/`. `server.js` serves the built
+`web/dist/` (and keeps `/api/data` + `/api/report`); if `web/dist` is missing it
+returns a 500 asking you to run the build.
+
+### Frontend dev mode
+
+    cd web && npm install && npm run dev
+
+The Vite dev server proxies `/api` to `http://localhost:3456`, so run `npm start`
+in the repo root alongside it for live data.
 
 ## Test
 

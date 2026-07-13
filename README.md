@@ -47,7 +47,7 @@ plan** and focuses on attribution and advice:
 ## Quick start
 
 ```sh
-git clone https://github.com/<you>/claude-code-cost-dashboard
+git clone https://github.com/simantaturja/claude-code-cost-dashboard
 cd claude-code-cost-dashboard
 npm --prefix web install   # frontend deps (backend has none)
 npm run build              # build the React app into web/dist

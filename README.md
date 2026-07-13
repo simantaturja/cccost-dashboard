@@ -12,6 +12,8 @@ API key, no proxy, no account, no data leaves your machine.
 > value* computed from local usage logs — on a Pro/Max subscription they are not
 > what you are billed.
 
+![Dashboard demo](docs/demo.gif)
+
 **Efficiency advisor** — flags likely overspend, per session:
 
 ![Efficiency advisor](docs/screenshot-advisor.png)

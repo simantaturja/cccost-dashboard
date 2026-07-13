@@ -26,7 +26,8 @@ in the repo root alongside it for live data.
 
 ## Config
 
-`config.json` in the repo root (optional; built-in defaults used if missing):
+`config.json` in the repo root (optional; built-in defaults used if missing).
+It is gitignored — copy `config.example.json` and edit it with your own values:
 
 ```json
 {
@@ -38,6 +39,10 @@ in the repo root alongside it for live data.
   "defaultClient": "Personal"
 }
 ```
+
+Paths are matched as prefixes against each session's project directory. Set
+`subscriptionUSDPerMonth` to your plan price for the ROI figure. With no
+`clients`, every session is attributed to `defaultClient`.
 
 A session is attributed to the first client whose path prefix matches the
 session's project path; no match falls back to `defaultClient`.

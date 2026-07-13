@@ -168,30 +168,37 @@ const line = (o) => JSON.stringify({
 });
 
 // opus input rate $5/1M, so input N*1e6 → cost $5N
-const dn1 = parseSession(line({ ts: '2026-06-30T10:00:00.000Z', cwd: '/absolute/path/to/clientA/projects/app', id: 'd1', input: 1e6 }), { sessionId: 'dn1', project: 'p' });
-const dn2 = parseSession(line({ ts: '2026-07-01T10:00:00.000Z', cwd: '/absolute/path/to/clientA/projects/app', id: 'd2', input: 2e6 }), { sessionId: 'dn2', project: 'p' });
-const cef = parseSession(line({ ts: '2026-07-05T10:00:00.000Z', cwd: '/absolute/path/to/clientB/projects/x', id: 'c1', input: 4e6 }), { sessionId: 'cef', project: 'p' });
-const personal = parseSession(line({ ts: '2026-07-02T10:00:00.000Z', cwd: '/Users/other/thing', id: 'o1', input: 1e6 }), { sessionId: 'per', project: 'p' });
+const TEST_CONFIG = {
+  subscriptionUSDPerMonth: 200,
+  clients: { Acme: ['/work/acme'], Globex: ['/work/globex'] },
+  defaultClient: 'Personal',
+};
+const acme1 = parseSession(line({ ts: '2026-06-30T10:00:00.000Z', cwd: '/work/acme/app', id: 'd1', input: 1e6 }), { sessionId: 'a1', project: 'p' });
+const acme2 = parseSession(line({ ts: '2026-07-01T10:00:00.000Z', cwd: '/work/acme/app', id: 'd2', input: 2e6 }), { sessionId: 'a2', project: 'p' });
+const globex = parseSession(line({ ts: '2026-07-05T10:00:00.000Z', cwd: '/work/globex/x', id: 'c1', input: 4e6 }), { sessionId: 'gx', project: 'p' });
+const personal = parseSession(line({ ts: '2026-07-02T10:00:00.000Z', cwd: '/home/me/thing', id: 'o1', input: 1e6 }), { sessionId: 'per', project: 'p' });
 
 test('clientOf: prefix match, first-wins, default fallback', () => {
-  assert.strictEqual(clientOf('/absolute/path/to/clientA/projects/app', DEFAULT_CONFIG), 'Client A');
-  assert.strictEqual(clientOf('/absolute/path/to/clientB/projects/x', DEFAULT_CONFIG), 'Client B');
-  assert.strictEqual(clientOf('/somewhere/else', DEFAULT_CONFIG), 'Personal');
+  assert.strictEqual(clientOf('/work/acme/app', TEST_CONFIG), 'Acme');
+  assert.strictEqual(clientOf('/work/globex/x', TEST_CONFIG), 'Globex');
+  assert.strictEqual(clientOf('/somewhere/else', TEST_CONFIG), 'Personal');
   const cfg = { clients: { A: ['/x'], B: ['/x/y'] }, defaultClient: 'D', subscriptionUSDPerMonth: 1 };
   assert.strictEqual(clientOf('/x/y/z', cfg), 'A'); // first-wins
   assert.strictEqual(clientOf('/nope', cfg), 'D');
+  // default config ships with no clients: everything → defaultClient
+  assert.strictEqual(clientOf('/anything', DEFAULT_CONFIG), 'Personal');
 });
 
 test('buildResponse byClient + monthly roll up across a month boundary', () => {
-  const r = buildResponse([dn1, dn2, cef, personal]);
+  const r = buildResponse([acme1, acme2, globex, personal], TEST_CONFIG);
   const byName = Object.fromEntries(r.byClient.map((c) => [c.client, c]));
-  assert.deepStrictEqual(byName['Client A'].months, { '2026-06': 5, '2026-07': 10 });
-  assert.strictEqual(byName['Client A'].costUSD, 15);
-  assert.strictEqual(byName['Client A'].sessionCount, 2);
-  assert.deepStrictEqual(byName['Client B'].months, { '2026-07': 20 });
+  assert.deepStrictEqual(byName['Acme'].months, { '2026-06': 5, '2026-07': 10 });
+  assert.strictEqual(byName['Acme'].costUSD, 15);
+  assert.strictEqual(byName['Acme'].sessionCount, 2);
+  assert.deepStrictEqual(byName['Globex'].months, { '2026-07': 20 });
   assert.deepStrictEqual(byName['Personal'].months, { '2026-07': 5 });
   // cost desc
-  assert.deepStrictEqual(r.byClient.map((c) => c.client), ['Client B', 'Client A', 'Personal']);
+  assert.deepStrictEqual(r.byClient.map((c) => c.client), ['Globex', 'Acme', 'Personal']);
   // monthly ascending
   assert.deepStrictEqual(r.monthly, [
     { month: '2026-06', costUSD: 5, tokens: 1e6 },
@@ -200,15 +207,15 @@ test('buildResponse byClient + monthly roll up across a month boundary', () => {
 });
 
 test('buildReport renders markdown for a month, clients by cost desc + total', () => {
-  const r = buildResponse([dn1, dn2, cef, personal]);
+  const r = buildResponse([acme1, acme2, globex, personal], TEST_CONFIG);
   const md = buildReport(r.byClient, '2026-07', '2026-07-13');
   assert.strictEqual(md, [
     '# Claude Code usage — 2026-07',
     '',
     '| Client | Cost (USD) |',
     '|---|---|',
-    '| Client B | $20.00 |',
-    '| Client A | $10.00 |',
+    '| Globex | $20.00 |',
+    '| Acme | $10.00 |',
     '| Personal | $5.00 |',
     '| **Total** | **$35.00** |',
     '',
@@ -218,13 +225,13 @@ test('buildReport renders markdown for a month, clients by cost desc + total', (
 });
 
 test('buildResponse roi: multiple = monthly value / subscription, ascending', () => {
-  const r = buildResponse([dn1, dn2, cef, personal]);
+  const r = buildResponse([acme1, acme2, globex, personal], TEST_CONFIG);
   assert.strictEqual(r.roi.subscriptionUSDPerMonth, 200);
   assert.deepStrictEqual(r.roi.months, [
     { month: '2026-06', valueUSD: 5, multiple: 5 / 200 },
     { month: '2026-07', valueUSD: 35, multiple: 35 / 200 },
   ]);
-  const r2 = buildResponse([dn1, dn2, cef, personal], { subscriptionUSDPerMonth: 100 });
+  const r2 = buildResponse([acme1, acme2, globex, personal], { subscriptionUSDPerMonth: 100 });
   assert.strictEqual(r2.roi.subscriptionUSDPerMonth, 100);
   assert.strictEqual(r2.roi.months[1].multiple, 35 / 100);
 });

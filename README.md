@@ -51,18 +51,18 @@ plan** and focuses on attribution and advice:
 Run it without cloning:
 
 ```sh
-npx cccost                 # then open http://localhost:3456
+npx cccost-dashboard                 # then open http://localhost:3456
 ```
 
 Or install it globally:
 
 ```sh
-npm install -g cccost
-cccost
+npm install -g cccost-dashboard
+cccost-dashboard
 ```
 
 Refresh the page to pick up new sessions — only changed files are re-parsed.
-Override the port with `PORT=4000 cccost`.
+Override the port with `PORT=4000 cccost-dashboard`.
 
 ### From source
 
@@ -94,8 +94,8 @@ Run `npm start` in the repo root alongside it — the dev server proxies `/api` 
 
 ## Configuration
 
-Create a `config.json` in the directory you run `cccost` from, or at
-`~/.config/cccost/config.json` (from a source checkout, `config.example.json` is a
+Create a `config.json` in the directory you run `cccost-dashboard` from, or at
+`~/.config/cccost-dashboard/config.json` (from a source checkout, `config.example.json` is a
 starting point). Example:
 
 ```json

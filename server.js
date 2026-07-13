@@ -21,11 +21,11 @@ const MIME = {
 };
 
 // Config is the user's, not the package's — look in the working directory first,
-// then ~/.config/cccost/. (When run from a source checkout, cwd is the repo root.)
+// then ~/.config/cccost-dashboard/. (When run from a source checkout, cwd is the repo root.)
 function loadConfig() {
   const candidates = [
     path.join(process.cwd(), 'config.json'),
-    path.join(os.homedir(), '.config', 'cccost', 'config.json'),
+    path.join(os.homedir(), '.config', 'cccost-dashboard', 'config.json'),
   ];
   for (const p of candidates) {
     try {

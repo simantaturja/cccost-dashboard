@@ -1,11 +1,11 @@
 {
-  "name": "cccost",
+  "name": "cccost-dashboard",
   "version": "1.1.0",
   "description": "Local, zero-setup cost dashboard for Claude Code — per project, client, model, and prompt, with an efficiency advisor.",
   "author": "Simanta Deb Turja",
   "license": "MIT",
   "bin": {
-    "cccost": "server.js"
+    "cccost-dashboard": "server.js"
   },
   "files": [
     "lib",

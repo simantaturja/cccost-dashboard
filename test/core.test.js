@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { parseSession, buildResponse, getRates } = require('../lib/core');
+const { parseSession, buildResponse, mergeSessionAggregates, getRates } = require('../lib/core');
 
 const opusLine = JSON.stringify({
   type: 'assistant',
@@ -99,6 +99,23 @@ test('buildResponse rolls up summary, projects, models, daily', () => {
   assert.strictEqual(r.daily.length, 2);
   assert.strictEqual(r.daily[0].date, '2026-07-01'); // ascending
   assert.strictEqual(r.sessions.length, 1);
+});
+
+test('mergeSessionAggregates combines a session file with its subagent files', () => {
+  const main = parseSession(opusLine, { sessionId: 'sess-1', project: 'dir-name' });
+  const sub = parseSession(fableLine, { sessionId: 'sess-1', project: 'dir-name' });
+  const merged = mergeSessionAggregates([main, sub]);
+  assert.strictEqual(merged.sessionId, 'sess-1');
+  assert.strictEqual(merged.project, '/Users/x/proj'); // cwd from main file wins
+  assert.strictEqual(merged.messages, 2);
+  assert.ok(Math.abs(merged.costUSD - (0.0165 + 0.001515)) < 1e-9);
+  assert.deepStrictEqual(merged.tokens, {
+    input: 110, output: 220, cacheWrite5m: 430, cacheWrite1h: 600, cacheRead: 5040,
+  });
+  assert.strictEqual(merged.firstTimestamp, '2026-07-01T10:00:00.000Z');
+  assert.strictEqual(merged.lastTimestamp, '2026-07-02T11:00:00.000Z');
+  assert.strictEqual(Object.keys(merged.models).length, 2);
+  assert.strictEqual(Object.keys(merged.daily).length, 2);
 });
 
 test('buildResponse skips sessions with zero usage messages', () => {

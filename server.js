@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 'use strict';
 const http = require('node:http');
 const fs = require('node:fs');
@@ -19,12 +20,21 @@ const MIME = {
   '.html': 'text/html; charset=utf-8',
 };
 
+// Config is the user's, not the package's — look in the working directory first,
+// then ~/.config/cccost/. (When run from a source checkout, cwd is the repo root.)
 function loadConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
-  } catch {
-    return null;
+  const candidates = [
+    path.join(process.cwd(), 'config.json'),
+    path.join(os.homedir(), '.config', 'cccost', 'config.json'),
+  ];
+  for (const p of candidates) {
+    try {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch {
+      // try next candidate
+    }
   }
+  return null;
 }
 const config = loadConfig();
 

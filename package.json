@@ -1,10 +1,20 @@
 {
-  "name": "claude-code-cost-dashboard",
-  "version": "1.0.0",
-  "description": "Local, zero-setup dashboard for Claude Code token usage and cost — per project, client, model, and prompt, with an efficiency advisor.",
+  "name": "cccost",
+  "version": "1.1.0",
+  "description": "Local, zero-setup cost dashboard for Claude Code — per project, client, model, and prompt, with an efficiency advisor.",
   "author": "Simanta Deb Turja",
   "license": "MIT",
-  "private": true,
+  "bin": {
+    "cccost": "server.js"
+  },
+  "files": [
+    "lib",
+    "server.js",
+    "web/dist",
+    "config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/simantaturja/claude-code-cost-dashboard.git"
@@ -18,7 +28,8 @@
     "tokens",
     "usage",
     "dashboard",
-    "analytics"
+    "analytics",
+    "cli"
   ],
   "engines": {
     "node": ">=20.19"
@@ -26,6 +37,7 @@
   "scripts": {
     "start": "node server.js",
     "build": "npm --prefix web run build",
-    "test": "node --test"
+    "test": "node --test",
+    "prepublishOnly": "npm --prefix web ci && npm run build"
   }
 }

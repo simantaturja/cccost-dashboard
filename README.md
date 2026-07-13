@@ -46,7 +46,25 @@ plan** and focuses on attribution and advice:
 - Node.js **≥ 20.19** (uses `node --test` and recursive `fs.readdir`; the frontend
   build needs Vite 8 / React 19).
 
-## Quick start
+## Install
+
+Run it without cloning:
+
+```sh
+npx cccost                 # then open http://localhost:3456
+```
+
+Or install it globally:
+
+```sh
+npm install -g cccost
+cccost
+```
+
+Refresh the page to pick up new sessions — only changed files are re-parsed.
+Override the port with `PORT=4000 cccost`.
+
+### From source
 
 ```sh
 git clone https://github.com/simantaturja/claude-code-cost-dashboard
@@ -56,15 +74,8 @@ npm run build              # build the React app into web/dist
 npm start                  # serve at http://localhost:3456
 ```
 
-Open <http://localhost:3456>. Refresh to pick up new sessions — only changed files
-are re-parsed.
-
-Override the port with `PORT=4000 npm start`.
-
-### Try it with demo data
-
-No Claude Code history yet, or want to see it populated? Point it at the bundled
-synthetic dataset:
+Try it against the bundled synthetic dataset (source checkout only — the demo data
+isn't shipped in the npm package):
 
 ```sh
 CLAUDE_PROJECTS_DIR=./demo/projects npm start
@@ -83,7 +94,9 @@ Run `npm start` in the repo root alongside it — the dev server proxies `/api` 
 
 ## Configuration
 
-Copy `config.example.json` to `config.json` (gitignored) and edit:
+Create a `config.json` in the directory you run `cccost` from, or at
+`~/.config/cccost/config.json` (from a source checkout, `config.example.json` is a
+starting point). Example:
 
 ```json
 {

@@ -66,6 +66,7 @@ function refresh() {
       }
       const { sessionId, key, isMain } = sessionKeyFor(dir, rel);
       const aggregate = parseSession(text, { sessionId, project: dir });
+      aggregate.isMain = isMain;
       fileCache.set(filePath, { mtimeMs: st.mtimeMs, size: st.size, sessionKey: key, isMain, aggregate });
     }
   }

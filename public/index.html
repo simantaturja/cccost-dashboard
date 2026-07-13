@@ -50,6 +50,8 @@
   <div class="scroll"><table id="projects"></table></div>
   <h2>By model</h2>
   <div class="scroll"><table id="models"></table></div>
+  <h2>Efficiency advisor</h2>
+  <div class="scroll"><table id="advisor"></table></div>
   <h2>Sessions</h2>
   <div class="scroll"><table id="sessions"></table></div>
   <p class="footnote" id="diag"></p>
@@ -157,6 +159,23 @@ function renderModels(rows) {
     }).join('') + '</tbody>';
 }
 
+function renderAdvisor(rows) {
+  const table = document.getElementById('advisor');
+  if (!rows.length) {
+    table.innerHTML = '<tbody><tr><td>No flagged sessions.</td></tr></tbody>';
+    return;
+  }
+  table.innerHTML =
+    '<thead><tr><th>Project</th><th>Session</th><th class="num">Date</th><th class="num">Cost</th>' +
+    '<th class="num">Est. saving</th><th>Reasons</th></tr></thead><tbody>' +
+    rows.map(a =>
+      `<tr><td title="${esc(a.project)}">${esc(shortProject(a.project))}</td>` +
+      `<td>${esc(a.sessionId.slice(0, 8))}</td><td class="num">${(a.lastTimestamp || '').slice(0, 10)}</td>` +
+      `<td class="num">${fmtUSD(a.costUSD)}</td>` +
+      `<td class="num">${a.estSavingUSD ? fmtUSD(a.estSavingUSD) : '—'}</td>` +
+      `<td>${a.reasons.map(r => esc(r)).join('<br>')}</td></tr>`).join('') + '</tbody>';
+}
+
 let sessSort = { key: 'cost', dir: -1 };
 let allSessions = [];
 
@@ -220,6 +239,7 @@ async function main() {
   renderReport(data.monthly);
   renderProjects(data.byProject);
   renderModels(data.byModel);
+  renderAdvisor(data.advisor);
   drawSessions();
   document.getElementById('diag').textContent =
     `Plan multiple is API-equivalent value, not billing · ` +

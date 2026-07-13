@@ -195,3 +195,71 @@ test('buildResponse roi: multiple = monthly value / subscription, ascending', ()
   assert.strictEqual(r2.roi.subscriptionUSDPerMonth, 100);
   assert.strictEqual(r2.roi.months[1].multiple, 35 / 100);
 });
+
+test('mergeSessionAggregates sums subagentCostUSD from non-main files', () => {
+  const main = Object.assign(parseSession(opusLine, { sessionId: 'sess-1', project: 'p' }), { isMain: true });
+  const sub1 = Object.assign(parseSession(fableLine, { sessionId: 'sess-1', project: 'p' }), { isMain: false });
+  const sub2 = Object.assign(parseSession(fableLine, { sessionId: 'sess-1', project: 'p' }), { isMain: false });
+  const merged = mergeSessionAggregates([main, sub1, sub2]);
+  assert.ok(Math.abs(merged.subagentCostUSD - 0.001515 * 2) < 1e-9);
+  // no subagents → 0
+  const solo = mergeSessionAggregates([Object.assign(parseSession(opusLine, { sessionId: 's', project: 'p' }), { isMain: true })]);
+  assert.strictEqual(solo.subagentCostUSD, 0);
+});
+
+const emptyTok = () => ({ input: 0, output: 0, cacheWrite5m: 0, cacheWrite1h: 0, cacheRead: 0 });
+function fakeSession(o) {
+  return {
+    sessionId: o.sessionId, project: '/p',
+    firstTimestamp: '2026-07-01T00:00:00.000Z', lastTimestamp: '2026-07-01T00:00:00.000Z',
+    messages: o.messages != null ? o.messages : 10,
+    tokens: o.tokens || emptyTok(),
+    costUSD: o.costUSD || 0,
+    models: o.models || {},
+    daily: {}, malformedLines: 0, unknownModelMessages: 0,
+    subagentCostUSD: o.subagentCostUSD || 0,
+  };
+}
+const advisorById = (r) => Object.fromEntries(r.advisor.map((a) => [a.sessionId, a]));
+
+test('advisor rule 1: low cache ratio fires below 0.5, not at threshold', () => {
+  const fire = fakeSession({ sessionId: 'r1-fire', costUSD: 2, tokens: { ...emptyTok(), input: 1000, cacheRead: 100 } });
+  const nofire = fakeSession({ sessionId: 'r1-thresh', costUSD: 2, tokens: { ...emptyTok(), input: 100, cacheRead: 100 } });
+  const nocost = fakeSession({ sessionId: 'r1-cost', costUSD: 0.5, tokens: { ...emptyTok(), input: 1000, cacheRead: 100 } });
+  const a = advisorById(buildResponse([fire, nofire, nocost]));
+  assert.deepStrictEqual(a['r1-fire'].reasons, ['Low cache hit ratio (9%) — context likely rebuilt repeatedly']);
+  assert.strictEqual(a['r1-fire'].estSavingUSD, 0);
+  assert.ok(!a['r1-thresh']);
+  assert.ok(!a['r1-cost']);
+});
+
+test('advisor rule 2: fable-5 on short session, est saving = fableCost * 0.7', () => {
+  const models = { 'claude-fable-5': { costUSD: 5, messages: 5, tokens: emptyTok() } };
+  const fire = fakeSession({ sessionId: 'r2-fire', costUSD: 5, messages: 10, models });
+  const nofire = fakeSession({ sessionId: 'r2-long', costUSD: 5, messages: 20, models });
+  const a = advisorById(buildResponse([fire, nofire]));
+  assert.deepStrictEqual(a['r2-fire'].reasons, ['fable-5 on a short session — sonnet likely sufficient (est. save $3.50)']);
+  assert.ok(Math.abs(a['r2-fire'].estSavingUSD - 3.5) < 1e-9);
+  assert.ok(!a['r2-long']);
+});
+
+test('advisor rule 3: subagent-heavy fires above 0.6 and cost >= 5, not at threshold', () => {
+  const fire = fakeSession({ sessionId: 'r3-fire', costUSD: 6, subagentCostUSD: 4 });
+  const nofire = fakeSession({ sessionId: 'r3-thresh', costUSD: 5, subagentCostUSD: 3 });
+  const nocost = fakeSession({ sessionId: 'r3-cost', costUSD: 4, subagentCostUSD: 4 });
+  const a = advisorById(buildResponse([fire, nofire, nocost]));
+  assert.deepStrictEqual(a['r3-fire'].reasons, ['67% of cost from subagents ($4.00) — check delegation value']);
+  assert.ok(!a['r3-thresh']);
+  assert.ok(!a['r3-cost']);
+});
+
+test('advisor sorts by cost desc and caps at 25', () => {
+  const many = [];
+  for (let i = 1; i <= 30; i++) {
+    many.push(fakeSession({ sessionId: `s${i}`, costUSD: i, tokens: { ...emptyTok(), input: 1000 } }));
+  }
+  const r = buildResponse(many);
+  assert.strictEqual(r.advisor.length, 25);
+  assert.strictEqual(r.advisor[0].costUSD, 30);
+  assert.strictEqual(r.advisor[24].costUSD, 6);
+});

@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   parseSession, buildResponse, mergeSessionAggregates, getRates,
-  clientOf, buildReport, DEFAULT_CONFIG, parseTurns, attributeSubagentTurns,
+  buildReport, DEFAULT_CONFIG, parseTurns, attributeSubagentTurns,
 } = require('../lib/core');
 
 const opusLine = JSON.stringify({
@@ -168,58 +168,40 @@ const line = (o) => JSON.stringify({
 });
 
 // opus input rate $5/1M, so input N*1e6 → cost $5N
-const TEST_CONFIG = {
-  subscriptionUSDPerMonth: 200,
-  clients: { Acme: ['/work/acme'], Globex: ['/work/globex'] },
-  defaultClient: 'Personal',
-};
+const TEST_CONFIG = { subscriptionUSDPerMonth: 200 };
 const acme1 = parseSession(line({ ts: '2026-06-30T10:00:00.000Z', cwd: '/work/acme/app', id: 'd1', input: 1e6 }), { sessionId: 'a1', project: 'p' });
 const acme2 = parseSession(line({ ts: '2026-07-01T10:00:00.000Z', cwd: '/work/acme/app', id: 'd2', input: 2e6 }), { sessionId: 'a2', project: 'p' });
 const globex = parseSession(line({ ts: '2026-07-05T10:00:00.000Z', cwd: '/work/globex/x', id: 'c1', input: 4e6 }), { sessionId: 'gx', project: 'p' });
 const personal = parseSession(line({ ts: '2026-07-02T10:00:00.000Z', cwd: '/home/me/thing', id: 'o1', input: 1e6 }), { sessionId: 'per', project: 'p' });
 
-test('clientOf: prefix match, first-wins, default fallback', () => {
-  assert.strictEqual(clientOf('/work/acme/app', TEST_CONFIG), 'Acme');
-  assert.strictEqual(clientOf('/work/globex/x', TEST_CONFIG), 'Globex');
-  assert.strictEqual(clientOf('/somewhere/else', TEST_CONFIG), 'Personal');
-  const cfg = { clients: { A: ['/x'], B: ['/x/y'] }, defaultClient: 'D', subscriptionUSDPerMonth: 1 };
-  assert.strictEqual(clientOf('/x/y/z', cfg), 'A'); // first-wins
-  assert.strictEqual(clientOf('/nope', cfg), 'D');
-  // default config ships with no clients: everything → defaultClient
-  assert.strictEqual(clientOf('/anything', DEFAULT_CONFIG), 'Personal');
-});
-
-test('buildResponse byClient + monthly roll up across a month boundary', () => {
+test('buildResponse monthly rolls up across a month boundary (local time)', () => {
   const r = buildResponse([acme1, acme2, globex, personal], TEST_CONFIG);
-  const byName = Object.fromEntries(r.byClient.map((c) => [c.client, c]));
-  assert.deepStrictEqual(byName['Acme'].months, { '2026-06': 5, '2026-07': 10 });
-  assert.strictEqual(byName['Acme'].costUSD, 15);
-  assert.strictEqual(byName['Acme'].sessionCount, 2);
-  assert.deepStrictEqual(byName['Globex'].months, { '2026-07': 20 });
-  assert.deepStrictEqual(byName['Personal'].months, { '2026-07': 5 });
-  // cost desc
-  assert.deepStrictEqual(r.byClient.map((c) => c.client), ['Globex', 'Acme', 'Personal']);
-  // monthly ascending
+  // no client rollup any more
+  assert.strictEqual(r.byClient, undefined);
+  // monthly ascending; acme1 (Jun 30 16:00 local) → June, rest → July
   assert.deepStrictEqual(r.monthly, [
     { month: '2026-06', costUSD: 5, tokens: 1e6 },
     { month: '2026-07', costUSD: 35, tokens: 7e6 },
   ]);
 });
 
-test('buildReport renders markdown for a month, clients by cost desc + total', () => {
+test('buildReport renders a total-only monthly summary', () => {
   const r = buildResponse([acme1, acme2, globex, personal], TEST_CONFIG);
-  const md = buildReport(r.byClient, '2026-07', '2026-07-13');
-  assert.strictEqual(md, [
+  assert.strictEqual(buildReport(r.monthly, '2026-07', '2026-07-14'), [
     '# Claude Code usage — 2026-07',
     '',
-    '| Client | Cost (USD) |',
-    '|---|---|',
-    '| Globex | $20.00 |',
-    '| Acme | $10.00 |',
-    '| Personal | $5.00 |',
-    '| **Total** | **$35.00** |',
+    'Total: $35.00 · 7,000,000 tokens',
     '',
-    'Generated 2026-07-13 · API-equivalent value at current Anthropic pricing.',
+    'Generated 2026-07-14 · API-equivalent value at current Anthropic pricing.',
+    '',
+  ].join('\n'));
+  // a month with no data → zeros
+  assert.strictEqual(buildReport(r.monthly, '2026-05', '2026-07-14'), [
+    '# Claude Code usage — 2026-05',
+    '',
+    'Total: $0.00 · 0 tokens',
+    '',
+    'Generated 2026-07-14 · API-equivalent value at current Anthropic pricing.',
     '',
   ].join('\n'));
 });

@@ -1,8 +1,3 @@
 {
-  "subscriptionUSDPerMonth": 200,
-  "clients": {
-    "Client A": ["/absolute/path/to/clientA/projects"],
-    "Client B": ["/absolute/path/to/clientB/projects"]
-  },
-  "defaultClient": "Personal"
+  "subscriptionUSDPerMonth": 200
 }

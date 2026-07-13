@@ -180,7 +180,7 @@ const server = http.createServer((req, res) => {
     refresh();
     const payload = buildResponse(sessions(), config);
     const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
-    const md = buildReport(payload.byClient, month, new Date().toISOString().slice(0, 10));
+    const md = buildReport(payload.monthly, month, new Date().toISOString().slice(0, 10));
     res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
     res.end(md);
     return;

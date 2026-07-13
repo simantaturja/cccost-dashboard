@@ -3,7 +3,6 @@ import TabNav from './components/TabNav.jsx';
 import Tiles from './components/Tiles.jsx';
 import DailyChart from './components/DailyChart.jsx';
 import ReportControl from './components/ReportControl.jsx';
-import ClientsTable from './components/ClientsTable.jsx';
 import ProjectsTable from './components/ProjectsTable.jsx';
 import ModelsTable from './components/ModelsTable.jsx';
 import AdvisorTable from './components/AdvisorTable.jsx';
@@ -62,15 +61,10 @@ export default function App() {
           {tab === 'overview' && (
             <>
               <Tiles summary={data.summary} roi={data.roi} />
-              <h2 className="section-label">Daily spend — last 90 days</h2>
+              <h2 className="section-label">Spend</h2>
               <DailyChart daily={data.daily} />
-              <h2 className="section-label">By client</h2>
+              <h2 className="section-label">Monthly report</h2>
               <ReportControl monthly={data.monthly} />
-              <ClientsTable
-                rows={data.byClient}
-                monthly={data.monthly}
-                totalCost={data.summary.totalCostUSD}
-              />
             </>
           )}
 

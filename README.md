@@ -164,7 +164,7 @@ The server also exposes JSON/markdown endpoints directly:
 
 Everything runs locally. The server reads your Claude Code logs from disk and
 serves them to `localhost` only. No API key, no telemetry, no outbound network
-calls. Your real `config.json` (with client names/paths) is gitignored.
+calls. Your `config.json` is gitignored.
 
 ## Testing
 

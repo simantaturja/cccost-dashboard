@@ -17,10 +17,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/simantaturja/claude-code-cost-dashboard.git"
+    "url": "git+https://github.com/simantaturja/cccost-dashboard.git"
   },
-  "homepage": "https://github.com/simantaturja/claude-code-cost-dashboard#readme",
-  "bugs": "https://github.com/simantaturja/claude-code-cost-dashboard/issues",
+  "homepage": "https://github.com/simantaturja/cccost-dashboard#readme",
+  "bugs": "https://github.com/simantaturja/cccost-dashboard/issues",
   "keywords": [
     "claude",
     "claude-code",

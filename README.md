@@ -71,8 +71,8 @@ Override the port with `PORT=4000 cccost-dashboard`.
 ### From source
 
 ```sh
-git clone https://github.com/simantaturja/claude-code-cost-dashboard
-cd claude-code-cost-dashboard
+git clone https://github.com/simantaturja/cccost-dashboard
+cd cccost-dashboard
 npm --prefix web install   # frontend deps (backend has none)
 npm run build              # build the React app into web/dist
 npm start                  # serve at http://localhost:3456

@@ -62,6 +62,31 @@ session's project path; no match falls back to `defaultClient`.
   lazily via `GET /api/session?key=<sessionKey>` and never enters the main
   `/api/data` payload or the in-memory cache. A project filter narrows the table.
 
+## How the efficiency advisor works
+
+Each session is run through `advisorFor` (`lib/core.js`). A session can trip
+several rules; each adds a reason. Only flagged sessions are returned, sorted by
+cost (highest first) and capped at 25. The thresholds are hand-picked heuristics,
+not tuned against outcomes — treat the output as a "look here first" signal.
+
+| Rule | Fires when | Meaning |
+|---|---|---|
+| Low cache hit ratio | cost ≥ $1 **and** cache-read < 50% of input-side tokens | Context was rebuilt instead of served from cache (reads are ~10× cheaper than fresh input). |
+| Premium model on a short session | used `fable-5` **and** < 20 messages | A short session rarely needs the most expensive model. Estimated saving = `fableCost × 0.7` (Sonnet ≈ 30% of Fable's price). |
+| Subagent-heavy | cost ≥ $5 **and** subagents > 60% of session cost | Subagent fan-out can add large overhead — worth checking the delegation earned its cost. |
+
+Only the premium-model rule produces a dollar estimate; the other two point.
+
+Limitations worth knowing:
+
+- A low cache ratio is often not your fault — the 5-minute cache TTL expiring
+  between bursts, `/clear`, or long idle gaps all lower it. It flags a symptom,
+  not necessarily a fixable mistake.
+- The Sonnet-saving estimate assumes the task would have succeeded on Sonnet,
+  which the advisor cannot verify.
+- The `$1` / `$5` / 20-message / 50% / 60% cutoffs are judgment calls and will
+  produce some false positives.
+
 ## Notes
 
 - Costs are API-equivalent (usage × current Anthropic pricing); on a Max

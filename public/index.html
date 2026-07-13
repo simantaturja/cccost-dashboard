@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code Cost Dashboard</title>
+<style>
+  :root { color-scheme: light dark;
+    --bg:#ffffff; --fg:#15181d; --muted:#68707d; --card:#f4f5f7; --border:#e2e4e9; --accent:#5b8def; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161a; --fg:#e8eaee; --muted:#9aa1ad; --card:#1e2127; --border:#2c3038; }
+  }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:20px; margin:0 0 16px; }
+  h2 { font-size:13px; margin:32px 0 8px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+  .tile { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .tile .v { font-size:24px; font-weight:650; }
+  .tile .l { color:var(--muted); font-size:12px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th,td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  td.num, th.num { text-align:right; }
+  th.sortable { cursor:pointer; user-select:none; }
+  tbody tr.row { cursor:pointer; }
+  tbody tr.row:hover td { background:var(--card); }
+  tr.detail td { background:var(--card); font-size:12px; padding:10px 24px; white-space:normal; }
+  .scroll { overflow-x:auto; }
+  svg text { fill:var(--muted); font-size:10px; }
+  .footnote { color:var(--muted); font-size:12px; margin-top:24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Claude Code Cost Dashboard</h1>
+  <div class="tiles" id="tiles"></div>
+  <h2>Daily spend — last 90 days</h2>
+  <div class="scroll"><svg id="daily" height="220" style="width:100%"></svg></div>
+  <h2>By project</h2>
+  <div class="scroll"><table id="projects"></table></div>
+  <h2>By model</h2>
+  <div class="scroll"><table id="models"></table></div>
+  <h2>Sessions</h2>
+  <div class="scroll"><table id="sessions"></table></div>
+  <p class="footnote" id="diag"></p>
+</main>
+<script>
+const fmtUSD = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtTok = n => n >= 1e9 ? (n / 1e9).toFixed(2) + 'B'
+  : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
+  : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n);
+const sumTok = t => t.input + t.output + t.cacheWrite5m + t.cacheWrite1h + t.cacheRead;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const shortProject = p => p.split('/').filter(Boolean).slice(-2).join('/');
+
+let totalCost = 0;
+
+function renderTiles(sum) {
+  const readShare = sum.totalTokens ? sum.cacheReadTokens / sum.totalTokens : 0;
+  const tiles = [
+    [fmtUSD(sum.totalCostUSD), 'Total cost (API-equivalent)'],
+    [fmtTok(sum.totalTokens), 'Total tokens'],
+    [String(sum.sessionCount), `Sessions across ${sum.projectCount} projects`],
+    [fmtUSD(sum.cacheSavingsUSD), 'Saved by prompt cache'],
+    [(readShare * 100).toFixed(1) + '%', 'Tokens served from cache'],
+  ];
+  document.getElementById('tiles').innerHTML = tiles
+    .map(([v, l]) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`)
+    .join('');
+}
+
+function renderDaily(daily) {
+  const svg = document.getElementById('daily');
+  const days = daily.slice(-90);
+  if (!days.length) return;
+  const W = 1080, H = 220, pad = { t: 10, r: 4, b: 28, l: 48 };
+  const max = Math.max(...days.map(d => d.costUSD), 0.01);
+  const bw = (W - pad.l - pad.r) / days.length;
+  let out = '';
+  for (let i = 0; i <= 3; i++) {
+    const v = (max * i) / 3;
+    const y = H - pad.b - ((H - pad.t - pad.b) * i) / 3;
+    out += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y}" y2="${y}" stroke="var(--border)"/>`;
+    out += `<text x="${pad.l - 6}" y="${y + 3}" text-anchor="end">$${v.toFixed(v < 10 ? 1 : 0)}</text>`;
+  }
+  days.forEach((d, i) => {
+    const h = ((H - pad.t - pad.b) * d.costUSD) / max;
+    const x = pad.l + i * bw;
+    out += `<rect fill="var(--accent)" rx="2" x="${x + 1}" y="${H - pad.b - h}" width="${Math.max(bw - 2, 1)}" height="${h}">` +
+      `<title>${d.date}: ${fmtUSD(d.costUSD)} · ${fmtTok(d.tokens)} tok</title></rect>`;
+    if (i % 7 === 0) out += `<text x="${x}" y="${H - 10}">${d.date.slice(5)}</text>`;
+  });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = out;
+}
+
+function renderProjects(rows) {
+  document.getElementById('projects').innerHTML =
+    '<thead><tr><th>Project</th><th class="num">Sessions</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Share</th></tr></thead><tbody>' +
+    rows.map(p => {
+      const share = totalCost ? ((p.costUSD / totalCost) * 100).toFixed(1) + '%' : '—';
+      return `<tr><td title="${esc(p.project)}">${esc(shortProject(p.project))}</td>` +
+        `<td class="num">${p.sessionCount}</td><td class="num">${fmtTok(p.tokens)}</td>` +
+        `<td class="num">${fmtUSD(p.costUSD)}</td><td class="num">${share}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+function renderModels(rows) {
+  document.getElementById('models').innerHTML =
+    '<thead><tr><th>Model</th><th class="num">Messages</th><th class="num">Tokens</th><th class="num">Cache read %</th><th class="num">Cost</th><th class="num">Share</th></tr></thead><tbody>' +
+    rows.map(m => {
+      const readPct = m.tokens ? ((m.cacheRead / m.tokens) * 100).toFixed(1) + '%' : '—';
+      const share = totalCost ? ((m.costUSD / totalCost) * 100).toFixed(1) + '%' : '—';
+      return `<tr><td>${esc(m.model)}</td><td class="num">${m.messages}</td>` +
+        `<td class="num">${fmtTok(m.tokens)}</td><td class="num">${readPct}</td>` +
+        `<td class="num">${fmtUSD(m.costUSD)}</td><td class="num">${share}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+let sessSort = { key: 'cost', dir: -1 };
+let allSessions = [];
+
+function detailHTML(s) {
+  const rows = Object.entries(s.models)
+    .sort((a, b) => b[1].costUSD - a[1].costUSD)
+    .map(([model, m]) =>
+      `<tr><td>${esc(model)}</td><td class="num">${m.messages}</td>` +
+      `<td class="num">${fmtTok(m.tokens.input)}</td><td class="num">${fmtTok(m.tokens.output)}</td>` +
+      `<td class="num">${fmtTok(m.tokens.cacheWrite5m + m.tokens.cacheWrite1h)}</td>` +
+      `<td class="num">${fmtTok(m.tokens.cacheRead)}</td><td class="num">${fmtUSD(m.costUSD)}</td></tr>`)
+    .join('');
+  return `<div><b>${esc(s.project)}</b> · session ${esc(s.sessionId)}</div>` +
+    `<table><thead><tr><th>Model</th><th class="num">Msgs</th><th class="num">Input</th><th class="num">Output</th>` +
+    `<th class="num">Cache write</th><th class="num">Cache read</th><th class="num">Cost</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>`;
+}
+
+function drawSessions() {
+  const rows = [...allSessions].sort((a, b) => {
+    const [va, vb] = sessSort.key === 'date'
+      ? [a.lastTimestamp || '', b.lastTimestamp || '']
+      : [a.costUSD, b.costUSD];
+    return (va < vb ? -1 : va > vb ? 1 : 0) * sessSort.dir;
+  });
+  const table = document.getElementById('sessions');
+  table.innerHTML =
+    `<thead><tr><th>Project</th><th>Session</th>` +
+    `<th class="sortable num" data-k="date">Last active ⇅</th><th class="num">Msgs</th>` +
+    `<th class="num">Tokens</th><th class="sortable num" data-k="cost">Cost ⇅</th></tr></thead><tbody>` +
+    rows.map((s, i) =>
+      `<tr class="row" data-i="${i}"><td title="${esc(s.project)}">${esc(shortProject(s.project))}</td>` +
+      `<td>${esc(s.sessionId.slice(0, 8))}</td><td class="num">${(s.lastTimestamp || '').slice(0, 10)}</td>` +
+      `<td class="num">${s.messages}</td><td class="num">${fmtTok(sumTok(s.tokens))}</td>` +
+      `<td class="num">${fmtUSD(s.costUSD)}</td></tr>`).join('') + '</tbody>';
+
+  table.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    sessSort = { key: k, dir: sessSort.key === k ? -sessSort.dir : -1 };
+    drawSessions();
+  }));
+  table.querySelectorAll('tr.row').forEach(tr => tr.addEventListener('click', () => {
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('detail')) { next.remove(); return; }
+    const s = rows[Number(tr.dataset.i)];
+    const detail = document.createElement('tr');
+    detail.className = 'detail';
+    detail.innerHTML = `<td colspan="6"></td>`;
+    detail.firstChild.innerHTML = detailHTML(s);
+    tr.after(detail);
+  }));
+}
+
+async function main() {
+  const data = await (await fetch('/api/data')).json();
+  totalCost = data.summary.totalCostUSD;
+  allSessions = data.sessions;
+  renderTiles(data.summary);
+  renderDaily(data.daily);
+  renderProjects(data.byProject);
+  renderModels(data.byModel);
+  drawSessions();
+  document.getElementById('diag').textContent =
+    `${data.summary.malformedLines} malformed lines skipped · ` +
+    `${data.summary.unknownModelMessages} messages with unknown model priced at $0 · ` +
+    `generated ${new Date(data.generatedAt).toLocaleString()}`;
+}
+main();
+</script>
+</body>
+</html>

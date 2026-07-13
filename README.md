@@ -65,4 +65,6 @@ session's project path; no match falls back to `defaultClient`.
   pricing changes. Cache writes are priced per TTL (5m = 1.25× input,
   1h = 2× input); cache reads at 0.1× input.
 - Assistant messages are deduped by `message.id` (streaming writes duplicates).
+- Days and months are bucketed by the machine's **local** calendar date, so
+  billing months follow wall-clock time rather than UTC.
 - Refresh the page to pick up new sessions; only changed files are re-parsed.

@@ -1,4 +1,7 @@
 'use strict';
+// Pin TZ to +06 (Asia/Dhaka) BEFORE requires so local-date assertions are
+// deterministic on any machine/CI, independent of the host timezone.
+process.env.TZ = 'Asia/Dhaka';
 const { test } = require('node:test');
 const assert = require('node:assert');
 const {
@@ -103,6 +106,18 @@ test('parseSession dedup keeps the LAST occurrence when duplicates differ (strea
   assert.strictEqual(s.messages, 1);
   assert.strictEqual(s.tokens.output, 378); // last-wins: not 4 (partial), not 382 (summed)
   assert.ok(Math.abs(s.costUSD - (100 * 5 + 378 * 25) / 1e6) < 1e-9, `got ${s.costUSD}`);
+});
+
+test('parseSession buckets daily/monthly by LOCAL date across a UTC month boundary', () => {
+  // 2026-06-30T20:00:00Z is 2026-07-01 02:00 local (+06) — must land in July, not June.
+  const late = JSON.stringify({
+    type: 'assistant', timestamp: '2026-06-30T20:00:00.000Z',
+    message: { id: 'msg_late', model: 'claude-opus-4-8', usage: { input_tokens: 1e6 } },
+  });
+  const s = parseSession(late, { sessionId: 'sess-boundary', project: 'p' });
+  assert.deepStrictEqual(Object.keys(s.daily), ['2026-07-01']);
+  const r = buildResponse([s]);
+  assert.deepStrictEqual(r.monthly.map((m) => m.month), ['2026-07']);
 });
 
 test('buildResponse rolls up summary, projects, models, daily', () => {

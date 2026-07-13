@@ -65,7 +65,7 @@ const shortProject = p => p.split('/').filter(Boolean).slice(-2).join('/');
 
 let totalCost = 0;
 
-function renderTiles(sum) {
+function renderTiles(sum, roi) {
   const readShare = sum.totalTokens ? sum.cacheReadTokens / sum.totalTokens : 0;
   const tiles = [
     [fmtUSD(sum.totalCostUSD), 'Total cost (API-equivalent)'],
@@ -74,6 +74,11 @@ function renderTiles(sum) {
     [fmtUSD(sum.cacheSavingsUSD), 'Saved by prompt cache'],
     [(readShare * 100).toFixed(1) + '%', 'Tokens served from cache'],
   ];
+  const last = roi.months[roi.months.length - 1];
+  if (last) {
+    const monthName = new Date(last.month + '-01').toLocaleString('en-US', { month: 'long' });
+    tiles.push([last.multiple.toFixed(1) + '×', `${monthName} value vs $${roi.subscriptionUSDPerMonth}/mo plan`]);
+  }
   document.getElementById('tiles').innerHTML = tiles
     .map(([v, l]) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div></div>`)
     .join('');
@@ -209,7 +214,7 @@ async function main() {
   const data = await (await fetch('/api/data')).json();
   totalCost = data.summary.totalCostUSD;
   allSessions = data.sessions;
-  renderTiles(data.summary);
+  renderTiles(data.summary, data.roi);
   renderDaily(data.daily);
   renderClients(data.byClient, data.monthly);
   renderReport(data.monthly);
@@ -217,6 +222,7 @@ async function main() {
   renderModels(data.byModel);
   drawSessions();
   document.getElementById('diag').textContent =
+    `Plan multiple is API-equivalent value, not billing · ` +
     `${data.summary.malformedLines} malformed lines skipped · ` +
     `${data.summary.unknownModelMessages} messages with unknown model priced at $0 · ` +
     `generated ${new Date(data.generatedAt).toLocaleString()}`;

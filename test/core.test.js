@@ -183,3 +183,15 @@ test('buildReport renders markdown for a month, clients by cost desc + total', (
     '',
   ].join('\n'));
 });
+
+test('buildResponse roi: multiple = monthly value / subscription, ascending', () => {
+  const r = buildResponse([dn1, dn2, cef, personal]);
+  assert.strictEqual(r.roi.subscriptionUSDPerMonth, 200);
+  assert.deepStrictEqual(r.roi.months, [
+    { month: '2026-06', valueUSD: 5, multiple: 5 / 200 },
+    { month: '2026-07', valueUSD: 35, multiple: 35 / 200 },
+  ]);
+  const r2 = buildResponse([dn1, dn2, cef, personal], { subscriptionUSDPerMonth: 100 });
+  assert.strictEqual(r2.roi.subscriptionUSDPerMonth, 100);
+  assert.strictEqual(r2.roi.months[1].multiple, 35 / 100);
+});

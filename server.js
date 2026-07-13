@@ -39,6 +39,14 @@ function sessionKeyFor(projectDir, relPath) {
   return { sessionId, key: `${projectDir}/${sessionId}`, isMain: segments.length === 1 };
 }
 
+// Map a `/assets/...` URL to an absolute path inside web/dist/assets, or null if
+// it would escape that directory (path-traversal guard).
+function resolveAssetPath(pathname) {
+  const rel = path.normalize(pathname).replace(/^(\.\.[/\\])+/, '');
+  const filePath = path.join(DIST_DIR, rel);
+  return filePath.startsWith(path.join(DIST_DIR, 'assets')) ? filePath : null;
+}
+
 function refresh() {
   const seen = new Set();
   let dirs = [];
@@ -180,9 +188,8 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/assets/')) {
-    const rel = path.normalize(url.pathname).replace(/^(\.\.[/\\])+/, '');
-    const filePath = path.join(DIST_DIR, rel);
-    if (!filePath.startsWith(path.join(DIST_DIR, 'assets'))) {
+    const filePath = resolveAssetPath(url.pathname);
+    if (!filePath) {
       res.writeHead(404);
       res.end('not found');
       return;
@@ -203,9 +210,24 @@ const server = http.createServer((req, res) => {
   res.end('not found');
 });
 
-console.time('initial scan');
-refresh();
-console.timeEnd('initial scan');
-server.listen(PORT, () => {
-  console.log(`Dashboard: http://localhost:${PORT} (${fileCache.size} session files)`);
-});
+function start() {
+  console.time('initial scan');
+  refresh();
+  console.timeEnd('initial scan');
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Start on another port: PORT=4000 npm start`);
+      process.exit(1);
+    }
+    throw err;
+  });
+  server.listen(PORT, () => {
+    console.log(`Dashboard: http://localhost:${PORT} (${fileCache.size} session files)`);
+  });
+}
+
+if (require.main === module) {
+  start();
+}
+
+module.exports = { sessionKeyFor, resolveAssetPath };

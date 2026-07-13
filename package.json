@@ -1,7 +1,28 @@
 {
   "name": "claude-code-cost-dashboard",
   "version": "1.0.0",
+  "description": "Local, zero-setup dashboard for Claude Code token usage and cost — per project, client, model, and prompt, with an efficiency advisor.",
+  "author": "Simanta Deb Turja",
+  "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<you>/claude-code-cost-dashboard.git"
+  },
+  "homepage": "https://github.com/<you>/claude-code-cost-dashboard#readme",
+  "bugs": "https://github.com/<you>/claude-code-cost-dashboard/issues",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "cost",
+    "tokens",
+    "usage",
+    "dashboard",
+    "analytics"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "start": "node server.js",
     "build": "npm --prefix web run build",

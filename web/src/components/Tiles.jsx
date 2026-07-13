@@ -1,7 +1,8 @@
 import { fmtUSD, fmtTok } from '../format.js';
 
 function monthName(month) {
-  return new Date(month + '-01').toLocaleString('en-US', { month: 'long' });
+  const [y, m] = month.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleString('en-US', { month: 'long' });
 }
 
 export default function Tiles({ summary, roi }) {

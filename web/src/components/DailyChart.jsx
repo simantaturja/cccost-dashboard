@@ -21,11 +21,32 @@ function barPath(x, y, w, h) {
   );
 }
 
+const pad = (n) => String(n).padStart(2, '0');
+const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// Continuous series of the last 90 calendar days ending at the newest date in
+// the data, filling missing dates with zeros so idle days read as empty slots
+// on the axis rather than collapsing adjacent active days together. Local time.
+function last90Days(daily) {
+  if (!daily.length) return [];
+  const byDate = new Map(daily.map((d) => [d.date, d]));
+  const [y, m, dd] = daily[daily.length - 1].date.split('-').map(Number);
+  const end = new Date(y, m - 1, dd);
+  const out = [];
+  for (let i = 89; i >= 0; i--) {
+    const cur = new Date(end);
+    cur.setDate(end.getDate() - i);
+    const key = dateKey(cur);
+    out.push(byDate.get(key) || { date: key, costUSD: 0, tokens: 0 });
+  }
+  return out;
+}
+
 export default function DailyChart({ daily }) {
   const wrapRef = useRef(null);
   const [hover, setHover] = useState(null);
 
-  const days = daily.slice(-90);
+  const days = last90Days(daily);
   if (!days.length) {
     return <div className="empty">No daily spend recorded yet.</div>;
   }

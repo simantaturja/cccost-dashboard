@@ -1,5 +1,9 @@
 # Claude Code Cost Dashboard
 
+[![npm version](https://img.shields.io/npm/v/cccost-dashboard)](https://www.npmjs.com/package/cccost-dashboard)
+[![license: MIT](https://img.shields.io/npm/l/cccost-dashboard)](LICENSE)
+![node](https://img.shields.io/node/v/cccost-dashboard)
+
 A local, zero-setup dashboard that shows where your [Claude Code](https://claude.com/claude-code)
 tokens and money go — per project, per client, per model, and **per prompt** — with
 an efficiency advisor that flags where you're likely overspending.

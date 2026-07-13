@@ -3,11 +3,20 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { parseSession, buildResponse, mergeSessionAggregates } = require('./lib/core');
+const { parseSession, buildResponse, mergeSessionAggregates, buildReport } = require('./lib/core');
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const PORT = process.env.PORT || 3456;
 const INDEX_HTML = path.join(__dirname, 'public', 'index.html');
+
+function loadConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+const config = loadConfig();
 
 // filePath -> { mtimeMs, size, sessionKey, aggregate }
 const fileCache = new Map();
@@ -81,9 +90,18 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname === '/api/data') {
     refresh();
-    const payload = buildResponse(sessions());
+    const payload = buildResponse(sessions(), config);
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify(payload));
+    return;
+  }
+  if (url.pathname === '/api/report') {
+    refresh();
+    const payload = buildResponse(sessions(), config);
+    const month = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+    const md = buildReport(payload.byClient, month, new Date().toISOString().slice(0, 10));
+    res.writeHead(200, { 'content-type': 'text/markdown; charset=utf-8' });
+    res.end(md);
     return;
   }
   if (url.pathname === '/') {

@@ -29,6 +29,9 @@
   .scroll { overflow-x:auto; }
   svg text { fill:var(--muted); font-size:10px; }
   .footnote { color:var(--muted); font-size:12px; margin-top:24px; }
+  .report { font-size:12px; color:var(--muted); margin:0 0 8px; }
+  .report select, .report a { font-size:12px; }
+  .report a { color:var(--accent); margin-left:6px; }
 </style>
 </head>
 <body>
@@ -37,6 +40,12 @@
   <div class="tiles" id="tiles"></div>
   <h2>Daily spend — last 90 days</h2>
   <div class="scroll"><svg id="daily" height="220" style="width:100%"></svg></div>
+  <h2>By client</h2>
+  <p class="report">Monthly report:
+    <select id="reportMonth"></select>
+    <a id="reportLink" href="#">Download</a>
+  </p>
+  <div class="scroll"><table id="clients"></table></div>
   <h2>By project</h2>
   <div class="scroll"><table id="projects"></table></div>
   <h2>By model</h2>
@@ -93,6 +102,31 @@ function renderDaily(daily) {
   });
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.innerHTML = out;
+}
+
+function renderClients(rows, monthly) {
+  const months = monthly.map(m => m.month).slice(-3);
+  const head = '<thead><tr><th>Client</th><th class="num">Sessions</th><th class="num">Tokens</th>' +
+    months.map(m => `<th class="num">${m}</th>`).join('') +
+    '<th class="num">Cost</th><th class="num">Share</th></tr></thead><tbody>';
+  document.getElementById('clients').innerHTML = head +
+    rows.map(c => {
+      const share = totalCost ? ((c.costUSD / totalCost) * 100).toFixed(1) + '%' : '—';
+      const cells = months.map(m => `<td class="num">${c.months[m] ? fmtUSD(c.months[m]) : '—'}</td>`).join('');
+      return `<tr><td>${esc(c.client)}</td><td class="num">${c.sessionCount}</td>` +
+        `<td class="num">${fmtTok(c.tokens)}</td>${cells}` +
+        `<td class="num">${fmtUSD(c.costUSD)}</td><td class="num">${share}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+function renderReport(monthly) {
+  const sel = document.getElementById('reportMonth');
+  const link = document.getElementById('reportLink');
+  const months = monthly.map(m => m.month).reverse();
+  sel.innerHTML = months.map(m => `<option value="${m}">${m}</option>`).join('');
+  const update = () => { link.href = `/api/report?month=${sel.value}`; };
+  sel.addEventListener('change', update);
+  update();
 }
 
 function renderProjects(rows) {
@@ -177,6 +211,8 @@ async function main() {
   allSessions = data.sessions;
   renderTiles(data.summary);
   renderDaily(data.daily);
+  renderClients(data.byClient, data.monthly);
+  renderReport(data.monthly);
   renderProjects(data.byProject);
   renderModels(data.byModel);
   drawSessions();

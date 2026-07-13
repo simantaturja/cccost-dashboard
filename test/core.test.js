@@ -1,7 +1,10 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { parseSession, buildResponse, mergeSessionAggregates, getRates } = require('../lib/core');
+const {
+  parseSession, buildResponse, mergeSessionAggregates, getRates,
+  clientOf, buildReport, DEFAULT_CONFIG,
+} = require('../lib/core');
 
 const opusLine = JSON.stringify({
   type: 'assistant',
@@ -122,4 +125,61 @@ test('buildResponse skips sessions with zero usage messages', () => {
   const empty = parseSession('', { sessionId: 'e', project: 'p' });
   const r = buildResponse([empty]);
   assert.strictEqual(r.summary.sessionCount, 0);
+});
+
+const line = (o) => JSON.stringify({
+  type: 'assistant',
+  timestamp: o.ts,
+  cwd: o.cwd,
+  message: { id: o.id, model: o.model || 'claude-opus-4-8', usage: { input_tokens: o.input } },
+});
+
+// opus input rate $5/1M, so input N*1e6 → cost $5N
+const dn1 = parseSession(line({ ts: '2026-06-30T10:00:00.000Z', cwd: '/absolute/path/to/clientA/projects/app', id: 'd1', input: 1e6 }), { sessionId: 'dn1', project: 'p' });
+const dn2 = parseSession(line({ ts: '2026-07-01T10:00:00.000Z', cwd: '/absolute/path/to/clientA/projects/app', id: 'd2', input: 2e6 }), { sessionId: 'dn2', project: 'p' });
+const cef = parseSession(line({ ts: '2026-07-05T10:00:00.000Z', cwd: '/absolute/path/to/clientB/projects/x', id: 'c1', input: 4e6 }), { sessionId: 'cef', project: 'p' });
+const personal = parseSession(line({ ts: '2026-07-02T10:00:00.000Z', cwd: '/Users/other/thing', id: 'o1', input: 1e6 }), { sessionId: 'per', project: 'p' });
+
+test('clientOf: prefix match, first-wins, default fallback', () => {
+  assert.strictEqual(clientOf('/absolute/path/to/clientA/projects/app', DEFAULT_CONFIG), 'Client A');
+  assert.strictEqual(clientOf('/absolute/path/to/clientB/projects/x', DEFAULT_CONFIG), 'Client B');
+  assert.strictEqual(clientOf('/somewhere/else', DEFAULT_CONFIG), 'Personal');
+  const cfg = { clients: { A: ['/x'], B: ['/x/y'] }, defaultClient: 'D', subscriptionUSDPerMonth: 1 };
+  assert.strictEqual(clientOf('/x/y/z', cfg), 'A'); // first-wins
+  assert.strictEqual(clientOf('/nope', cfg), 'D');
+});
+
+test('buildResponse byClient + monthly roll up across a month boundary', () => {
+  const r = buildResponse([dn1, dn2, cef, personal]);
+  const byName = Object.fromEntries(r.byClient.map((c) => [c.client, c]));
+  assert.deepStrictEqual(byName['Client A'].months, { '2026-06': 5, '2026-07': 10 });
+  assert.strictEqual(byName['Client A'].costUSD, 15);
+  assert.strictEqual(byName['Client A'].sessionCount, 2);
+  assert.deepStrictEqual(byName['Client B'].months, { '2026-07': 20 });
+  assert.deepStrictEqual(byName['Personal'].months, { '2026-07': 5 });
+  // cost desc
+  assert.deepStrictEqual(r.byClient.map((c) => c.client), ['Client B', 'Client A', 'Personal']);
+  // monthly ascending
+  assert.deepStrictEqual(r.monthly, [
+    { month: '2026-06', costUSD: 5, tokens: 1e6 },
+    { month: '2026-07', costUSD: 35, tokens: 7e6 },
+  ]);
+});
+
+test('buildReport renders markdown for a month, clients by cost desc + total', () => {
+  const r = buildResponse([dn1, dn2, cef, personal]);
+  const md = buildReport(r.byClient, '2026-07', '2026-07-13');
+  assert.strictEqual(md, [
+    '# Claude Code usage — 2026-07',
+    '',
+    '| Client | Cost (USD) |',
+    '|---|---|',
+    '| Client B | $20.00 |',
+    '| Client A | $10.00 |',
+    '| Personal | $5.00 |',
+    '| **Total** | **$35.00** |',
+    '',
+    'Generated 2026-07-13 · API-equivalent value at current Anthropic pricing.',
+    '',
+  ].join('\n'));
 });

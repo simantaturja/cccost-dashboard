@@ -1,6 +1,7 @@
 # Claude Code Cost Dashboard
 
 [![npm version](https://img.shields.io/npm/v/cccost-dashboard)](https://www.npmjs.com/package/cccost-dashboard)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/turja.cccost-dashboard-vscode?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=turja.cccost-dashboard-vscode)
 [![license: MIT](https://img.shields.io/npm/l/cccost-dashboard)](LICENSE)
 ![node](https://img.shields.io/node/v/cccost-dashboard)
 
@@ -74,25 +75,28 @@ Run the dashboard inside VS Code in a panel, plus a status-bar item showing
 today's spend. **Desktop VS Code only** (needs local filesystem access; does not
 run in vscode.dev / github.dev).
 
-Build the `.vsix` from a source checkout:
+Install from the
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=turja.cccost-dashboard-vscode):
+
+- **In VS Code:** Extensions view → search **“cccost”** → Install.
+- **CLI:** `code --install-extension turja.cccost-dashboard-vscode`
+
+Then open it: click the status-bar item (bottom-right), or run
+`Cmd/Ctrl+Shift+P` → **"Claude Code: Open Cost Dashboard"**.
+
+<details>
+<summary>Build the <code>.vsix</code> from source instead</summary>
 
 ```sh
 npm --prefix web run build                 # build the SPA
 npm --prefix extension install             # extension build/package deps
 npm --prefix extension run package         # -> extension/cccost-dashboard-vscode-<version>.vsix
+code --install-extension extension/cccost-dashboard-vscode-*.vsix
 ```
 
-Then install it, either way:
-
-- **CLI:** `code --install-extension extension/cccost-dashboard-vscode-*.vsix`
-- **GUI:** Extensions view → `⋯` menu → *Install from VSIX…* → pick the file.
-
-Reload the window (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*). The status-bar
-item appears bottom-right; click it, or run `Cmd/Ctrl+Shift+P` →
-**"Claude Code: Open Cost Dashboard"**, to open the panel.
-
-Using **Cursor / VSCodium / Windsurf**? Same file: `cursor --install-extension …`
-(or the *Install from VSIX…* menu).
+Using **Cursor / VSCodium / Windsurf**? Install the built `.vsix` with
+`cursor --install-extension …` (or Extensions view → `⋯` → *Install from VSIX…*).
+</details>
 
 See [extension/README.md](extension/README.md) for details.
 

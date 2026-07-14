@@ -4,3 +4,4 @@ config.json
 .DS_Store
 *.log
 docs/superpowers/
+.claude/

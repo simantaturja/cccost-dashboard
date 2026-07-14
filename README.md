@@ -70,19 +70,31 @@ Override the port with `PORT=4000 cccost-dashboard`.
 
 ### VS Code extension
 
-Run the dashboard inside VS Code — command **"Claude Code: Open Cost Dashboard"** —
-plus a status-bar item showing today's spend. Build the `.vsix` from a source
-checkout:
+Run the dashboard inside VS Code in a panel, plus a status-bar item showing
+today's spend. **Desktop VS Code only** (needs local filesystem access; does not
+run in vscode.dev / github.dev).
+
+Build the `.vsix` from a source checkout:
 
 ```sh
 npm --prefix web run build                 # build the SPA
-npm --prefix extension install
-npm --prefix extension run package         # -> extension/cccost-dashboard-vscode-*.vsix
-code --install-extension extension/cccost-dashboard-vscode-*.vsix
+npm --prefix extension install             # extension build/package deps
+npm --prefix extension run package         # -> extension/cccost-dashboard-vscode-<version>.vsix
 ```
 
-Desktop VS Code only (needs local filesystem access; not vscode.dev). See
-[extension/README.md](extension/README.md).
+Then install it, either way:
+
+- **CLI:** `code --install-extension extension/cccost-dashboard-vscode-*.vsix`
+- **GUI:** Extensions view → `⋯` menu → *Install from VSIX…* → pick the file.
+
+Reload the window (`Cmd/Ctrl+Shift+P` → *Developer: Reload Window*). The status-bar
+item appears bottom-right; click it, or run `Cmd/Ctrl+Shift+P` →
+**"Claude Code: Open Cost Dashboard"**, to open the panel.
+
+Using **Cursor / VSCodium / Windsurf**? Same file: `cursor --install-extension …`
+(or the *Install from VSIX…* menu).
+
+See [extension/README.md](extension/README.md) for details.
 
 ### From source
 

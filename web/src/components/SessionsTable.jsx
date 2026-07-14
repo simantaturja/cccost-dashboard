@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { api } from '../api.js';
 import { fmtUSD, fmtTok, sumTok, shortProject } from '../format.js';
 
 const TRUNCATE = 200;
@@ -44,11 +45,8 @@ function PromptTimeline({ sessionKey }) {
   useEffect(() => {
     let live = true;
     setState({ status: 'loading', turns: null, error: null });
-    fetch(`/api/session?key=${encodeURIComponent(sessionKey)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    api
+      .session(sessionKey)
       .then((d) => live && setState({ status: 'ready', turns: d.turns, error: null }))
       .catch((e) => live && setState({ status: 'error', turns: null, error: e.message }));
     return () => {

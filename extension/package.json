@@ -1,0 +1,60 @@
+{
+  "name": "cccost-dashboard-vscode",
+  "displayName": "cccost — Cost Dashboard for Claude Code",
+  "description": "Unofficial. Local, zero-setup cost dashboard for Claude Code — per project, model, and prompt, with an efficiency advisor. Reads ~/.claude/projects/ logs. Not affiliated with Anthropic. Desktop only.",
+  "version": "2.0.0",
+  "publisher": "simantaturja",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#18181b",
+    "theme": "dark"
+  },
+  "license": "MIT",
+  "author": "Simanta Deb Turja",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/simantaturja/cccost-dashboard.git"
+  },
+  "homepage": "https://github.com/simantaturja/cccost-dashboard#readme",
+  "bugs": "https://github.com/simantaturja/cccost-dashboard/issues",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "cost",
+    "tokens",
+    "usage",
+    "dashboard"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "cccost.open",
+        "title": "Claude Code: Open Cost Dashboard"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node build.js",
+    "vscode:prepublish": "node build.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.2"
+  }
+}

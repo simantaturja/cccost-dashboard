@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from './api.js';
 import TabNav from './components/TabNav.jsx';
 import Tiles from './components/Tiles.jsx';
 import DailyChart from './components/DailyChart.jsx';
@@ -28,13 +29,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/data')
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(setData)
-      .catch((e) => setError(e.message));
+    let live = true;
+    const load = () => {
+      api
+        .data()
+        .then((d) => live && setData(d))
+        .catch((e) => live && setError(e.message));
+    };
+    load();
+    const off = api.onDataChanged(load);
+    return () => {
+      live = false;
+      off();
+    };
   }, []);
 
   return (

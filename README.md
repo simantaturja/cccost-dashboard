@@ -68,6 +68,22 @@ cccost-dashboard
 Refresh the page to pick up new sessions — only changed files are re-parsed.
 Override the port with `PORT=4000 cccost-dashboard`.
 
+### VS Code extension
+
+Run the dashboard inside VS Code — command **"Claude Code: Open Cost Dashboard"** —
+plus a status-bar item showing today's spend. Build the `.vsix` from a source
+checkout:
+
+```sh
+npm --prefix web run build                 # build the SPA
+npm --prefix extension install
+npm --prefix extension run package         # -> extension/cccost-dashboard-vscode-*.vsix
+code --install-extension extension/cccost-dashboard-vscode-*.vsix
+```
+
+Desktop VS Code only (needs local filesystem access; not vscode.dev). See
+[extension/README.md](extension/README.md).
+
 ### From source
 
 ```sh
@@ -178,6 +194,16 @@ Issues and PRs welcome. Keep the backend dependency-free (`lib/core.js` and
 `server.js` use only Node built-ins) and add a test in `test/core.test.js` for any
 change to cost math or aggregation. See [docs/DESIGN.md](docs/DESIGN.md) for how
 the cost model, dedup, subagent merge, and advisor work.
+
+## Roadmap
+
+- **MCP server** — expose the same cost data (today's spend, by project/model,
+  monthly report, per-session drill-down) as a standalone
+  [MCP](https://modelcontextprotocol.io) server over stdio, reusing `lib/core.js`.
+  Any MCP client (Claude Code, Cursor, Zed, Claude Desktop) could then query it —
+  agent-rendered answers, not a visual dashboard. This is the path for Zed: a
+  native Zed dashboard isn't possible, since Zed extensions have no webview/UI
+  panel API and their filesystem access is scoped to the open project.
 
 ## License
 

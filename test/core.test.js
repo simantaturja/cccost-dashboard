@@ -410,3 +410,121 @@ test('attributeSubagentTurns: window attribution incl. before-first and after-la
   assert.ok(Math.abs(turns[1].costUSD - 30) < 1e-9);
   assert.ok(turns[1].models.includes('claude-fable-5'));
 });
+
+// ---- waste: tool_use / tool_result parsing + duplicate reads ----
+const asstTools = (o) => JSON.stringify({
+  type: 'assistant',
+  timestamp: o.ts || '2026-07-01T10:00:00.000Z',
+  cwd: o.cwd,
+  message: { id: o.id, model: 'claude-opus-4-8', usage: { input_tokens: 1 }, content: o.blocks },
+});
+const userResults = (o) => JSON.stringify({
+  type: 'user',
+  timestamp: o.ts || '2026-07-01T10:01:00.000Z',
+  message: { content: o.blocks },
+});
+
+test('waste: counts tool_use calls and attributes errored tool_result to its tool name', () => {
+  const text = [
+    asstTools({ id: 'm1', cwd: '/w/proj', blocks: [
+      { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/a.js' } },
+      { type: 'tool_use', id: 't3', name: 'Bash', input: { command: 'boom' } },
+    ] }),
+    userResults({ blocks: [
+      { type: 'tool_result', tool_use_id: 't3', is_error: true },
+      { type: 'tool_result', tool_use_id: 't2' }, // success — ignored
+    ] }),
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w1', project: 'p' });
+  assert.strictEqual(s.waste.toolCallCount, 3);
+  assert.strictEqual(s.waste.erroredToolCalls, 1);
+  assert.deepStrictEqual(s.waste.erroredByTool, { Bash: 1 });
+  assert.strictEqual(s.waste.redundantReads, 0);
+});
+
+test('waste: streaming re-writes of the same tool_use/result are counted once', () => {
+  const line = asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] });
+  const res = userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] });
+  const s = parseSession([line, line, res, res].join('\n'), { sessionId: 'w-dup', project: 'p' });
+  assert.strictEqual(s.waste.toolCallCount, 1);
+  assert.strictEqual(s.waste.erroredToolCalls, 1);
+});
+
+test('waste: duplicate Read is redundant; a Read after an Edit is not', () => {
+  const dup = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+  ].join('\n'), { sessionId: 'w2', project: 'p' });
+  assert.strictEqual(dup.waste.redundantReads, 1);
+  assert.deepStrictEqual(dup.waste.duplicateFiles, { '/w/a.js': 1 });
+
+  const reset = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 'e1', name: 'Edit', input: { file_path: '/w/a.js' } }] }),
+    asstTools({ id: 'm3', blocks: [{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+  ].join('\n'), { sessionId: 'w3', project: 'p' });
+  assert.strictEqual(reset.waste.redundantReads, 0);
+  assert.deepStrictEqual(reset.waste.duplicateFiles, {});
+});
+
+test('waste: sessions with no tool blocks get a zeroed waste object', () => {
+  const s = parseSession(opusLine, { sessionId: 'w-none', project: 'p' });
+  assert.deepStrictEqual(s.waste, {
+    toolCallCount: 0, erroredToolCalls: 0, erroredByTool: {}, redundantReads: 0, duplicateFiles: {},
+  });
+});
+
+test('mergeSessionAggregates merges waste across a main and a subagent file', () => {
+  const main = parseSession([
+    asstTools({ id: 'm1', cwd: '/w/proj', blocks: [
+      { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/a.js' } },
+      { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/a.js' } }, // redundant
+    ] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] }),
+  ].join('\n'), { sessionId: 's', project: 'p' });
+  const sub = parseSession([
+    asstTools({ id: 's1', blocks: [{ type: 'tool_use', id: 'u1', name: 'Bash', input: {} }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 'u1', is_error: true }] }),
+  ].join('\n'), { sessionId: 's', project: 'p' });
+  const merged = mergeSessionAggregates([main, sub]);
+  assert.strictEqual(merged.waste.toolCallCount, 3);
+  assert.strictEqual(merged.waste.erroredToolCalls, 2);
+  assert.deepStrictEqual(merged.waste.erroredByTool, { Read: 1, Bash: 1 });
+  assert.strictEqual(merged.waste.redundantReads, 1);
+  assert.deepStrictEqual(merged.waste.duplicateFiles, { '/w/a.js': 1 });
+});
+
+test('buildResponse aggregates waste and byProject across sessions in different projects', () => {
+  const projA = parseSession([
+    asstTools({ id: 'a1', cwd: '/w/alpha', blocks: [
+      { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/alpha/x.js' } },
+      { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/alpha/x.js' } }, // redundant
+      { type: 'tool_use', id: 't3', name: 'Bash', input: {} },
+    ] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't3', is_error: true }] }),
+  ].join('\n'), { sessionId: 'A', project: 'p' });
+  const projB = parseSession([
+    asstTools({ id: 'b1', cwd: '/w/beta', blocks: [
+      { type: 'tool_use', id: 'u1', name: 'Edit', input: { file_path: '/w/beta/y.js' } },
+      { type: 'tool_use', id: 'u2', name: 'Bash', input: {} },
+    ] }),
+    userResults({ blocks: [
+      { type: 'tool_result', tool_use_id: 'u1', is_error: true },
+      { type: 'tool_result', tool_use_id: 'u2', is_error: true },
+    ] }),
+  ].join('\n'), { sessionId: 'B', project: 'p' });
+
+  const r = buildResponse([projA, projB]);
+  assert.strictEqual(r.waste.erroredToolCalls, 3); // 1 + 2
+  assert.strictEqual(r.waste.redundantReads, 1);
+  assert.strictEqual(r.waste.duplicateFileCount, 1);
+  assert.deepStrictEqual(r.waste.erroredByTool, [{ name: 'Bash', count: 2 }, { name: 'Edit', count: 1 }]);
+  assert.deepStrictEqual(r.waste.topDuplicateFiles, [{ path: '/w/alpha/x.js', extraReads: 1 }]);
+  // byProject sorted by (errored + redundant) desc: beta has 2, alpha has 1+1=2 → tie, both present
+  assert.strictEqual(r.waste.byProject.length, 2);
+  const beta = r.waste.byProject.find((p) => p.project === '/w/beta');
+  const alpha = r.waste.byProject.find((p) => p.project === '/w/alpha');
+  assert.deepStrictEqual(beta, { project: '/w/beta', erroredToolCalls: 2, redundantReads: 0 });
+  assert.deepStrictEqual(alpha, { project: '/w/alpha', erroredToolCalls: 1, redundantReads: 1 });
+});

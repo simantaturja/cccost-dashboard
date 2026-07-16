@@ -2,6 +2,7 @@ const LABELS = {
   overview: 'Overview',
   breakdown: 'Breakdown',
   advisor: 'Advisor',
+  waste: 'Waste',
   sessions: 'Sessions',
 };
 

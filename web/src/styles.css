@@ -121,6 +121,13 @@ body {
   background: var(--border);
 }
 
+.waste-summary {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 4px 0 0;
+}
+
 /* ---- Hero / meter panel ---- */
 .hero {
   background: var(--surface);

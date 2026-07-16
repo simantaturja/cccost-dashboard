@@ -121,6 +121,14 @@ body {
   background: var(--border);
 }
 
+.waste-intro {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 4px 0 12px;
+  max-width: 60ch;
+}
+
 .waste-summary {
   color: var(--muted);
   font-size: 13px;

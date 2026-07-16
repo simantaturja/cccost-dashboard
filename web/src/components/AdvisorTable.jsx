@@ -13,7 +13,7 @@ export default function AdvisorTable({ rows }) {
             <th>Session</th>
             <th className="num">Date</th>
             <th className="num">Cost</th>
-            <th className="num">Est. saving</th>
+            <th className="num" title="Quota/capacity value at API-equivalent pricing — not money saved on a subscription.">Est. capacity</th>
             <th>Reasons</th>
           </tr>
         </thead>
@@ -27,7 +27,10 @@ export default function AdvisorTable({ rows }) {
               <td className="num">{a.estSavingUSD ? fmtUSD(a.estSavingUSD) : '—'}</td>
               <td style={{ whiteSpace: 'normal' }}>
                 {a.reasons.map((r, i) => (
-                  <div key={i}>{r}</div>
+                  <div key={i}>
+                    <div>{r.text}</div>
+                    <div className="advisor-action">{r.action}</div>
+                  </div>
                 ))}
               </td>
             </tr>

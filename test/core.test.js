@@ -258,19 +258,28 @@ function fakeSession(o) {
 }
 const advisorById = (r) => Object.fromEntries(r.advisor.map((a) => [a.sessionId, a]));
 
-test('advisor rule 1: low cache ratio fires below 0.5, not at threshold', () => {
-  const fire = fakeSession({ sessionId: 'r1-fire', costUSD: 2, tokens: { ...emptyTok(), input: 1000, cacheRead: 100 } });
-  const nofire = fakeSession({ sessionId: 'r1-thresh', costUSD: 2, tokens: { ...emptyTok(), input: 100, cacheRead: 100 } });
-  const nocost = fakeSession({ sessionId: 'r1-cost', costUSD: 0.5, tokens: { ...emptyTok(), input: 1000, cacheRead: 100 } });
-  const a = advisorById(buildResponse([fire, nofire, nocost]));
-  assert.deepStrictEqual(a['r1-fire'].reasons, ['Low cache hit ratio (9%) — context likely rebuilt repeatedly']);
+test('advisor rule 1: low cache ratio fires below 0.5 with non-trivial volume, not at threshold', () => {
+  // denom = input + cacheWrite5m + cacheWrite1h + cacheRead; guard requires denom >= 200000.
+  const fire = fakeSession({ sessionId: 'r1-fire', costUSD: 2, tokens: { ...emptyTok(), input: 190000, cacheRead: 10000 } });
+  const thresh = fakeSession({ sessionId: 'r1-thresh', costUSD: 2, tokens: { ...emptyTok(), input: 100000, cacheRead: 100000 } });
+  const nocost = fakeSession({ sessionId: 'r1-cost', costUSD: 0.5, tokens: { ...emptyTok(), input: 190000, cacheRead: 10000 } });
+  const small = fakeSession({ sessionId: 'r1-small', costUSD: 2, tokens: { ...emptyTok(), input: 19000, cacheRead: 1000 } });
+  const a = advisorById(buildResponse([fire, thresh, nocost, small]));
+  assert.deepStrictEqual(a['r1-fire'].reasons, [{
+    text: 'Low cache hit ratio (5%) — context likely rebuilt repeatedly',
+    action: 'Run /clear between unrelated tasks so context is served from cache instead of rebuilt.',
+  }]);
   assert.strictEqual(a['r1-fire'].estSavingUSD, 0);
-  assert.ok(!a['r1-thresh']);
-  assert.ok(!a['r1-cost']);
+  assert.ok(!a['r1-thresh']); // ratio == 0.5, not below
+  assert.ok(!a['r1-cost']);   // cost < 1
+  assert.ok(!a['r1-small']);  // same 5% ratio but denom < 200000 — precision guard
 });
 
 test('advisor rule 2: any top-tier model on a short session flags; est saving = premiumCost * 0.7', () => {
-  const MSG = 'Premium model on a short session — a cheaper model likely sufficient (est. save $3.50)';
+  const MSG = {
+    text: 'Premium model on a short session — a cheaper model likely sufficient (est. save $3.50)',
+    action: 'Route short or simple tasks to a cheaper model (Sonnet) via /model.',
+  };
   const fableModels = { 'claude-fable-5': { costUSD: 5, messages: 5, tokens: emptyTok() } };
   const mythosModels = { 'claude-mythos-5': { costUSD: 5, messages: 5, tokens: emptyTok() } };
   const opusModels = { 'claude-opus-4-8': { costUSD: 5, messages: 5, tokens: emptyTok() } };
@@ -293,7 +302,10 @@ test('advisor rule 3: subagent-heavy fires above 0.6 and cost >= 5, not at thres
   const nofire = fakeSession({ sessionId: 'r3-thresh', costUSD: 5, subagentCostUSD: 3 });
   const nocost = fakeSession({ sessionId: 'r3-cost', costUSD: 4, subagentCostUSD: 4 });
   const a = advisorById(buildResponse([fire, nofire, nocost]));
-  assert.deepStrictEqual(a['r3-fire'].reasons, ['67% of cost from subagents ($4.00) — check delegation value']);
+  assert.deepStrictEqual(a['r3-fire'].reasons, [{
+    text: '67% of cost from subagents ($4.00) — check delegation value',
+    action: 'Check the fan-out earned its cost — try fewer subagents or a single-agent pass.',
+  }]);
   assert.ok(!a['r3-thresh']);
   assert.ok(!a['r3-cost']);
 });
@@ -301,7 +313,8 @@ test('advisor rule 3: subagent-heavy fires above 0.6 and cost >= 5, not at thres
 test('advisor sorts by cost desc and caps at 25', () => {
   const many = [];
   for (let i = 1; i <= 30; i++) {
-    many.push(fakeSession({ sessionId: `s${i}`, costUSD: i, tokens: { ...emptyTok(), input: 1000 } }));
+    // input >= 200000 with cacheRead 0 → passes the rule-1 precision guard so each session flags
+    many.push(fakeSession({ sessionId: `s${i}`, costUSD: i, tokens: { ...emptyTok(), input: 200000 } }));
   }
   const r = buildResponse(many);
   assert.strictEqual(r.advisor.length, 25);

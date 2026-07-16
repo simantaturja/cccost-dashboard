@@ -228,6 +228,8 @@ tr.detail > td { background: var(--surface-2); padding: 0; }
 
 .share-cell { color: var(--muted); }
 
+.advisor-action { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
 /* ---- Prompt timeline ---- */
 .timeline-label {
   font: 600 11px/1 var(--sans);

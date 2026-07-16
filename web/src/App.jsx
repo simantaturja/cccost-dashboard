@@ -8,9 +8,10 @@ import ProjectsTable from './components/ProjectsTable.jsx';
 import ModelsTable from './components/ModelsTable.jsx';
 import AdvisorTable from './components/AdvisorTable.jsx';
 import SessionsTable from './components/SessionsTable.jsx';
+import WasteTable from './components/WasteTable.jsx';
 import Diagnostics from './components/Diagnostics.jsx';
 
-const TABS = ['overview', 'breakdown', 'advisor', 'sessions'];
+const TABS = ['overview', 'breakdown', 'advisor', 'waste', 'sessions'];
 
 function currentTab() {
   const h = window.location.hash.slice(1);
@@ -88,6 +89,13 @@ export default function App() {
             <>
               <h2 className="section-label">Efficiency advisor</h2>
               <AdvisorTable rows={data.advisor} />
+            </>
+          )}
+
+          {tab === 'waste' && (
+            <>
+              <h2 className="section-label">Repeated waste across sessions</h2>
+              <WasteTable rows={data.waste} />
             </>
           )}
 

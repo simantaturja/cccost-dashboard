@@ -1,20 +1,38 @@
 import { shortProject } from '../format.js';
 
+// A one-liner shown in both states so a first-time viewer knows what "waste"
+// means and why the counts matter before reading any number.
+function Intro() {
+  return (
+    <p className="waste-intro">
+      Tool calls that <strong>failed and were retried</strong>, and files{' '}
+      <strong>re-read when the answer was already in context</strong> — quota you
+      paid for but didn&apos;t need. Shown as counts, not dollars: token usage is
+      logged per message, not per tool call.
+    </p>
+  );
+}
+
 // Exact counts only — token usage is per-message, not per-tool-block, so there
 // is no honest per-tool dollar figure to show here.
 export default function WasteTable({ rows }) {
   if (!rows || (!rows.erroredToolCalls && !rows.redundantReads)) {
-    return <div className="empty">No repeated waste detected.</div>;
+    return (
+      <>
+        <Intro />
+        <div className="empty">No repeated waste detected — tool calls mostly succeeded and context was reused.</div>
+      </>
+    );
   }
 
   return (
     <>
+      <Intro />
       <p className="waste-summary">
         {rows.erroredToolCalls.toLocaleString('en-US')} errored tool calls ·{' '}
         {rows.redundantReads.toLocaleString('en-US')} redundant file reads across{' '}
         {rows.duplicateFileCount.toLocaleString('en-US')} file
-        {rows.duplicateFileCount === 1 ? '' : 's'}. Counts only — no cost estimate,
-        since token usage is logged per message, not per tool call.
+        {rows.duplicateFileCount === 1 ? '' : 's'}.
       </p>
 
       {rows.erroredByTool.length > 0 && (

@@ -56,7 +56,7 @@ plan** and focuses on attribution and advice:
 Run it without cloning:
 
 ```sh
-npx cccost-dashboard                 # then open http://localhost:3456
+npx cccost-dashboard@latest          # then open http://localhost:3456
 ```
 
 Or install it globally:
@@ -64,6 +64,13 @@ Or install it globally:
 ```sh
 npm install -g cccost-dashboard
 cccost-dashboard
+```
+
+`npx cccost-dashboard` always runs the latest published version. If you
+installed globally, get the latest with:
+
+```sh
+npm install -g cccost-dashboard@latest
 ```
 
 Refresh the page to pick up new sessions — only changed files are re-parsed.

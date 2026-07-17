@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   parseSession, buildResponse, mergeSessionAggregates, getRates,
-  buildReport, DEFAULT_CONFIG, parseTurns, attributeSubagentTurns,
+  buildReport, DEFAULT_CONFIG, parseTurns, attributeSubagentTurns, classifyErrorReason,
 } = require('../lib/core');
 
 const opusLine = JSON.stringify({
@@ -424,7 +424,7 @@ const userResults = (o) => JSON.stringify({
   message: { content: o.blocks },
 });
 
-test('waste: counts tool_use calls and attributes errored tool_result to its tool name', () => {
+test('waste: counts tool_use calls and attributes errored tool_result to its tool name, only when retried', () => {
   const text = [
     asstTools({ id: 'm1', cwd: '/w/proj', blocks: [
       { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } },
@@ -435,19 +435,31 @@ test('waste: counts tool_use calls and attributes errored tool_result to its too
       { type: 'tool_result', tool_use_id: 't3', is_error: true },
       { type: 'tool_result', tool_use_id: 't2' }, // success — ignored
     ] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: { command: 'boom' } }] }), // retry of t3
   ].join('\n');
   const s = parseSession(text, { sessionId: 'w1', project: 'p' });
-  assert.strictEqual(s.waste.toolCallCount, 3);
+  assert.strictEqual(s.waste.toolCallCount, 4);
   assert.strictEqual(s.waste.erroredToolCalls, 1);
   assert.deepStrictEqual(s.waste.erroredByTool, { Bash: 1 });
   assert.strictEqual(s.waste.redundantReads, 0);
 });
 
+test('waste: an errored tool call with no later retry of the same tool is not counted', () => {
+  const text = [
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'git diff --exit-code' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] }),
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w-nonretry', project: 'p' });
+  assert.strictEqual(s.waste.erroredToolCalls, 0);
+  assert.deepStrictEqual(s.waste.erroredByTool, {});
+});
+
 test('waste: streaming re-writes of the same tool_use/result are counted once', () => {
   const line = asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] });
   const res = userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] });
-  const s = parseSession([line, line, res, res].join('\n'), { sessionId: 'w-dup', project: 'p' });
-  assert.strictEqual(s.waste.toolCallCount, 1);
+  const retry = asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Bash', input: {} }] });
+  const s = parseSession([line, line, res, res, retry, retry].join('\n'), { sessionId: 'w-dup', project: 'p' });
+  assert.strictEqual(s.waste.toolCallCount, 2);
   assert.strictEqual(s.waste.erroredToolCalls, 1);
 });
 
@@ -468,10 +480,30 @@ test('waste: duplicate Read is redundant; a Read after an Edit is not', () => {
   assert.deepStrictEqual(reset.waste.duplicateFiles, {});
 });
 
+test('waste: reads with offset/limit (pagination) are never flagged redundant', () => {
+  const s = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/w/big.log', offset: 0, limit: 2000 } }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/w/big.log', offset: 2000, limit: 2000 } }] }),
+    asstTools({ id: 'm3', blocks: [{ type: 'tool_use', id: 'r3', name: 'Read', input: { file_path: '/w/big.log', offset: 0, limit: 2000 } }] }), // exact repeat of r1's range
+  ].join('\n'), { sessionId: 'w-paginated', project: 'p' });
+  assert.strictEqual(s.waste.redundantReads, 0);
+  assert.deepStrictEqual(s.waste.duplicateFiles, {});
+});
+
+test('waste: a Bash call between two whole-file reads clears redundancy (file may have been mutated)', () => {
+  const s = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 'b1', name: 'Bash', input: { command: 'sed -i s/x/y/ /w/a.js' } }] }),
+    asstTools({ id: 'm3', blocks: [{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+  ].join('\n'), { sessionId: 'w-bash-reset', project: 'p' });
+  assert.strictEqual(s.waste.redundantReads, 0);
+});
+
 test('waste: sessions with no tool blocks get a zeroed waste object', () => {
   const s = parseSession(opusLine, { sessionId: 'w-none', project: 'p' });
   assert.deepStrictEqual(s.waste, {
-    toolCallCount: 0, erroredToolCalls: 0, erroredByTool: {}, redundantReads: 0, duplicateFiles: {},
+    toolCallCount: 0, erroredToolCalls: 0, erroredByTool: {}, erroredByReason: {},
+    redundantReads: 0, duplicateFiles: {}, daily: {},
   });
 });
 
@@ -480,17 +512,20 @@ test('mergeSessionAggregates merges waste across a main and a subagent file', ()
     asstTools({ id: 'm1', cwd: '/w/proj', blocks: [
       { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/a.js' } },
       { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/a.js' } }, // redundant
+      { type: 'tool_use', id: 't3', name: 'Bash', input: {} },
     ] }),
-    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't3', is_error: true }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: {} }] }), // retry of t3
   ].join('\n'), { sessionId: 's', project: 'p' });
   const sub = parseSession([
     asstTools({ id: 's1', blocks: [{ type: 'tool_use', id: 'u1', name: 'Bash', input: {} }] }),
     userResults({ blocks: [{ type: 'tool_result', tool_use_id: 'u1', is_error: true }] }),
+    asstTools({ id: 's2', blocks: [{ type: 'tool_use', id: 'u2', name: 'Bash', input: {} }] }), // retry of u1
   ].join('\n'), { sessionId: 's', project: 'p' });
   const merged = mergeSessionAggregates([main, sub]);
-  assert.strictEqual(merged.waste.toolCallCount, 3);
+  assert.strictEqual(merged.waste.toolCallCount, 6);
   assert.strictEqual(merged.waste.erroredToolCalls, 2);
-  assert.deepStrictEqual(merged.waste.erroredByTool, { Read: 1, Bash: 1 });
+  assert.deepStrictEqual(merged.waste.erroredByTool, { Bash: 2 });
   assert.strictEqual(merged.waste.redundantReads, 1);
   assert.deepStrictEqual(merged.waste.duplicateFiles, { '/w/a.js': 1 });
 });
@@ -503,6 +538,7 @@ test('buildResponse aggregates waste and byProject across sessions in different 
       { type: 'tool_use', id: 't3', name: 'Bash', input: {} },
     ] }),
     userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't3', is_error: true }] }),
+    asstTools({ id: 'a2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: {} }] }), // retry of t3
   ].join('\n'), { sessionId: 'A', project: 'p' });
   const projB = parseSession([
     asstTools({ id: 'b1', cwd: '/w/beta', blocks: [
@@ -512,6 +548,10 @@ test('buildResponse aggregates waste and byProject across sessions in different 
     userResults({ blocks: [
       { type: 'tool_result', tool_use_id: 'u1', is_error: true },
       { type: 'tool_result', tool_use_id: 'u2', is_error: true },
+    ] }),
+    asstTools({ id: 'b2', blocks: [
+      { type: 'tool_use', id: 'u3', name: 'Edit', input: { file_path: '/w/beta/y.js' } }, // retry of u1
+      { type: 'tool_use', id: 'u4', name: 'Bash', input: {} }, // retry of u2
     ] }),
   ].join('\n'), { sessionId: 'B', project: 'p' });
 
@@ -527,4 +567,92 @@ test('buildResponse aggregates waste and byProject across sessions in different 
   const alpha = r.waste.byProject.find((p) => p.project === '/w/alpha');
   assert.deepStrictEqual(beta, { project: '/w/beta', erroredToolCalls: 2, redundantReads: 0 });
   assert.deepStrictEqual(alpha, { project: '/w/alpha', erroredToolCalls: 1, redundantReads: 1 });
+});
+
+test('buildResponse aggregates waste into a per-day trend, merged across projects', () => {
+  const projA = parseSession([
+    asstTools({ id: 'a1', ts: '2026-07-01T10:00:00.000Z', cwd: '/w/alpha', blocks: [
+      { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/alpha/x.js' } },
+      { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/alpha/x.js' } }, // redundant, day 1
+    ] }),
+  ].join('\n'), { sessionId: 'A', project: 'p' });
+  const projB = parseSession([
+    asstTools({ id: 'b1', ts: '2026-07-01T11:00:00.000Z', cwd: '/w/beta', blocks: [
+      { type: 'tool_use', id: 'u1', name: 'Bash', input: {} },
+    ] }),
+    userResults({ ts: '2026-07-01T11:01:00.000Z', blocks: [{ type: 'tool_result', tool_use_id: 'u1', is_error: true }] }),
+    asstTools({ id: 'b2', ts: '2026-07-02T09:00:00.000Z', blocks: [
+      { type: 'tool_use', id: 'u2', name: 'Bash', input: {} }, // retry, day 2 — waste attributed to retry's day
+    ] }),
+  ].join('\n'), { sessionId: 'B', project: 'p' });
+
+  const r = buildResponse([projA, projB]);
+  assert.deepStrictEqual(r.waste.trend, [
+    { date: '2026-07-01', erroredToolCalls: 0, redundantReads: 1 },
+    { date: '2026-07-02', erroredToolCalls: 1, redundantReads: 0 },
+  ]);
+});
+
+// ---- waste: error-reason classification ----
+// Verbatim (truncated) strings pulled from real Claude Code session logs, so
+// the matcher is proven against actual message shapes, not invented ones.
+test('classifyErrorReason: known Claude Code error strings map to specific reasons', () => {
+  assert.strictEqual(
+    classifyErrorReason('<tool_use_error>File has not been read yet. Read it first before writing to it.</tool_use_error>'),
+    'edit-before-read',
+  );
+  assert.strictEqual(
+    classifyErrorReason("The user doesn't want to proceed with this tool use. The tool use was rejected"),
+    'user-rejected',
+  );
+  assert.strictEqual(
+    classifyErrorReason('<tool_use_error>String to replace not found in file.\nString: def foo():'),
+    'edit-string-not-found',
+  );
+  assert.strictEqual(
+    classifyErrorReason('<tool_use_error>File has been modified since read, either by the user or by a linter.'),
+    'stale-read',
+  );
+  assert.strictEqual(
+    classifyErrorReason('File does not exist. Note: your current working directory is /Users/x/proj.'),
+    'file-not-found',
+  );
+  assert.strictEqual(
+    classifyErrorReason('Permission for this action was denied by the Claude Code auto mode classifier. Reason: ...'),
+    'auto-mode-denied',
+  );
+  assert.strictEqual(
+    classifyErrorReason('claude-opus-4-8[1m] is temporarily unavailable, so auto mode cannot determine the safety'),
+    'model-unavailable',
+  );
+  assert.strictEqual(
+    classifyErrorReason('Working directory "/x" was deleted; shell cwd recovered to "/Users/x"'),
+    'cwd-deleted',
+  );
+});
+
+test('classifyErrorReason: unrecognized text (e.g. a bare shell exit code) is "other", not guessed', () => {
+  assert.strictEqual(classifyErrorReason('Exit code 1\nsome command output here'), 'other');
+  assert.strictEqual(classifyErrorReason(''), 'other');
+  assert.strictEqual(classifyErrorReason(undefined), 'other');
+});
+
+test('classifyErrorReason: handles array-of-text-block content shape, not just plain strings', () => {
+  const content = [{ type: 'text', text: 'File does not exist. Note: cwd is /x' }];
+  assert.strictEqual(classifyErrorReason(content), 'file-not-found');
+});
+
+test('waste: erroredByReason is attributed at retry time and aggregated in buildResponse', () => {
+  const s = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Edit', input: { file_path: '/w/a.js' } }] }),
+    userResults({ blocks: [{
+      type: 'tool_result', tool_use_id: 't1', is_error: true,
+      content: '<tool_use_error>String to replace not found in file.</tool_use_error>',
+    }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Edit', input: { file_path: '/w/a.js' } }] }), // retry
+  ].join('\n'), { sessionId: 'w-reason', project: 'p' });
+  assert.deepStrictEqual(s.waste.erroredByReason, { 'edit-string-not-found': 1 });
+
+  const r = buildResponse([s]);
+  assert.deepStrictEqual(r.waste.erroredByReason, [{ reason: 'edit-string-not-found', count: 1 }]);
 });

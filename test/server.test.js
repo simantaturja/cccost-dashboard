@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 // Requiring server.js does not start a listener (guarded by require.main).
-const { sessionKeyFor, resolveAssetPath } = require('../server');
+const { sessionKeyFor, resolveAssetPath, server, HOST } = require('../server');
 
 test('sessionKeyFor: main file vs nested subagent file share one key', () => {
   const main = sessionKeyFor('proj-dir', 'abc123.jsonl');
@@ -23,3 +23,11 @@ test('resolveAssetPath: serves under assets, rejects traversal', () => {
   assert.strictEqual(resolveAssetPath('/assets/../secret'), null);
   assert.strictEqual(resolveAssetPath('/assets/../../../etc/passwd'), null);
 });
+
+test('server binds to loopback only, not every interface', () => new Promise((resolve) => {
+  assert.strictEqual(HOST, '127.0.0.1');
+  server.listen(0, HOST, () => {
+    assert.strictEqual(server.address().address, '127.0.0.1');
+    server.close(resolve);
+  });
+}));

@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const {
   parseSession, buildResponse, mergeSessionAggregates, getRates,
   buildReport, DEFAULT_CONFIG, parseTurns, attributeSubagentTurns, classifyErrorReason,
+  redactSecrets,
 } = require('../lib/core');
 
 const opusLine = JSON.stringify({
@@ -444,6 +445,40 @@ test('waste: counts tool_use calls and attributes errored tool_result to its too
   assert.strictEqual(s.waste.redundantReads, 0);
 });
 
+test('waste: an unrelated later call of the same tool does not falsely confirm a different call\'s error', () => {
+  const text = [
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'rm -rf /tmp/A' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'File does not exist' }] }),
+    // A different, unrelated Bash command — not a retry of t1 — that also happens to error.
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Bash', input: { command: 'curl https://x' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't2', is_error: true, content: 'connection refused' }] }),
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w-falseretry', project: 'p' });
+  assert.strictEqual(s.waste.erroredToolCalls, 0);
+  assert.deepStrictEqual(s.waste.errorSamples, {});
+});
+
+test('waste: two different WebFetch errors never falsely confirm each other (no shared empty target)', () => {
+  const text = [
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'WebFetch', input: { url: 'https://a.example' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'WebFetch', input: { url: 'https://totally-different.example' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't2', is_error: true }] }),
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w-webfetch-nomatch', project: 'p' });
+  assert.strictEqual(s.waste.erroredToolCalls, 0);
+});
+
+test('waste: a genuine WebFetch retry of the SAME url is still counted (url is now a target)', () => {
+  const text = [
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'WebFetch', input: { url: 'https://a.example' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'WebFetch', input: { url: 'https://a.example' } }] }), // retry
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w-webfetch-match', project: 'p' });
+  assert.strictEqual(s.waste.erroredToolCalls, 1);
+});
+
 test('waste: an errored tool call with no later retry of the same tool is not counted', () => {
   const text = [
     asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'git diff --exit-code' } }] }),
@@ -455,9 +490,9 @@ test('waste: an errored tool call with no later retry of the same tool is not co
 });
 
 test('waste: streaming re-writes of the same tool_use/result are counted once', () => {
-  const line = asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] });
+  const line = asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'boom' } }] });
   const res = userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true }] });
-  const retry = asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Bash', input: {} }] });
+  const retry = asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Bash', input: { command: 'boom' } }] });
   const s = parseSession([line, line, res, res, retry, retry].join('\n'), { sessionId: 'w-dup', project: 'p' });
   assert.strictEqual(s.waste.toolCallCount, 2);
   assert.strictEqual(s.waste.erroredToolCalls, 1);
@@ -478,6 +513,24 @@ test('waste: duplicate Read is redundant; a Read after an Edit is not', () => {
   ].join('\n'), { sessionId: 'w3', project: 'p' });
   assert.strictEqual(reset.waste.redundantReads, 0);
   assert.deepStrictEqual(reset.waste.duplicateFiles, {});
+});
+
+test('waste: a Read after a MultiEdit is not redundant (the file genuinely changed)', () => {
+  const s = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 'e1', name: 'MultiEdit', input: { file_path: '/w/a.js' } }] }),
+    asstTools({ id: 'm3', blocks: [{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/w/a.js' } }] }),
+  ].join('\n'), { sessionId: 'w-multiedit-reset', project: 'p' });
+  assert.strictEqual(s.waste.redundantReads, 0);
+});
+
+test('waste: a Read after a NotebookEdit on the same notebook path is not redundant', () => {
+  const s = parseSession([
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/w/nb.ipynb' } }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 'e1', name: 'NotebookEdit', input: { notebook_path: '/w/nb.ipynb' } }] }),
+    asstTools({ id: 'm3', blocks: [{ type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/w/nb.ipynb' } }] }),
+  ].join('\n'), { sessionId: 'w-notebookedit-reset', project: 'p' });
+  assert.strictEqual(s.waste.redundantReads, 0);
 });
 
 test('waste: reads with offset/limit (pagination) are never flagged redundant', () => {
@@ -503,8 +556,88 @@ test('waste: sessions with no tool blocks get a zeroed waste object', () => {
   const s = parseSession(opusLine, { sessionId: 'w-none', project: 'p' });
   assert.deepStrictEqual(s.waste, {
     toolCallCount: 0, erroredToolCalls: 0, erroredByTool: {}, erroredByReason: {},
-    redundantReads: 0, duplicateFiles: {}, daily: {},
+    errorSamples: {}, redundantReads: 0, duplicateFiles: {}, daily: {},
   });
+});
+
+test('waste: a retried errored call keeps a sample with its command and error text', () => {
+  const text = [
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm run boom' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'File does not exist' }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Bash', input: { command: 'npm run boom' } }] }), // retry
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w-sample', project: 'p' });
+  assert.deepStrictEqual(s.waste.errorSamples, {
+    'Bash file-not-found': [{ tool: 'Bash', reason: 'file-not-found', target: 'npm run boom', text: 'File does not exist' }],
+  });
+});
+
+test('waste: no sample is kept for an errored call that is never retried', () => {
+  const text = [
+    asstTools({ id: 'm1', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls /nope' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'File does not exist' }] }),
+  ].join('\n');
+  const s = parseSession(text, { sessionId: 'w-nosample', project: 'p' });
+  assert.deepStrictEqual(s.waste.errorSamples, {});
+});
+
+test('waste: error samples redact credentials and cap at 3 distinct per tool+reason', () => {
+  const lines = [];
+  // 4 distinct failing commands of the same tool+reason; only 3 should be kept.
+  // The secret is masked; the trailing tag keeps each command distinct.
+  for (let i = 0; i < 4; i++) {
+    lines.push(asstTools({ id: `a${i}`, blocks: [{ type: 'tool_use', id: `t${i}`, name: 'Bash', input: { command: `curl --token deadbeef${i} tag${i}` } }] }));
+    lines.push(userResults({ blocks: [{ type: 'tool_result', tool_use_id: `t${i}`, is_error: true, content: 'boom' }] }));
+    lines.push(asstTools({ id: `r${i}`, blocks: [{ type: 'tool_use', id: `x${i}`, name: 'Bash', input: { command: `curl --token deadbeef${i} tag${i}` } }] }));
+  }
+  const s = parseSession(lines.join('\n'), { sessionId: 'w-cap', project: 'p' });
+  const arr = s.waste.errorSamples['Bash other'];
+  assert.strictEqual(arr.length, 3);
+  for (const smp of arr) {
+    assert.ok(!/deadbeef/.test(smp.target), `token leaked: ${smp.target}`);
+    assert.ok(smp.target.includes('«redacted»'));
+  }
+});
+
+test('redactSecrets masks values but keeps surrounding text', () => {
+  assert.strictEqual(redactSecrets('export API_KEY=abc123def'), 'export API_KEY=«redacted»');
+  assert.strictEqual(redactSecrets('curl --token deadbeef https://x'), 'curl --token «redacted» https://x');
+  assert.strictEqual(redactSecrets('-H "Authorization: Bearer xyz"'), '-H "Authorization: «redacted»"');
+  assert.strictEqual(redactSecrets('psql postgres://u:p4ss@db'), 'psql postgres://u:«redacted»@db');
+  assert.strictEqual(redactSecrets('plain command with no secret'), 'plain command with no secret');
+});
+
+test('redactSecrets catches env-var style names where the keyword is glued to a prefix by _', () => {
+  assert.strictEqual(redactSecrets('export DB_PASSWORD=hunter22222'), 'export DB_PASSWORD=«redacted»');
+  assert.strictEqual(redactSecrets('export STRIPE_SECRET_KEY=sk_live_abcdefgh'), 'export STRIPE_SECRET_KEY=«redacted»');
+  assert.strictEqual(redactSecrets('export MY_TOKEN=abcdefghijklmnop'), 'export MY_TOKEN=«redacted»');
+  assert.strictEqual(
+    redactSecrets('export ANTHROPIC_API_KEY=sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234567890'),
+    'export ANTHROPIC_API_KEY=«redacted»',
+  );
+});
+
+test('redactSecrets masks glued mysql/psql-style -p<password> (no space, no keyword)', () => {
+  assert.strictEqual(redactSecrets('mysql -uroot -phunter2 db'), 'mysql -uroot -p«redacted» db');
+});
+
+test('redactSecrets keeps a bare quote intact when the secret sits inside an already-quoted arg', () => {
+  assert.strictEqual(
+    redactSecrets('curl -H "x-api-key: sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234567890"'),
+    'curl -H "x-api-key: «redacted»"',
+  );
+});
+
+test('buildResponse flattens error samples across sessions', () => {
+  const s = parseSession([
+    asstTools({ id: 'm1', cwd: '/w/proj', blocks: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'boom' } }] }),
+    userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'File does not exist' }] }),
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't2', name: 'Bash', input: { command: 'boom' } }] }),
+  ].join('\n'), { sessionId: 'w-br', project: 'p' });
+  const r = buildResponse([s]);
+  assert.deepStrictEqual(r.waste.errorSamples, [
+    { tool: 'Bash', reason: 'file-not-found', target: 'boom', text: 'File does not exist' },
+  ]);
 });
 
 test('mergeSessionAggregates merges waste across a main and a subagent file', () => {
@@ -512,15 +645,15 @@ test('mergeSessionAggregates merges waste across a main and a subagent file', ()
     asstTools({ id: 'm1', cwd: '/w/proj', blocks: [
       { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/a.js' } },
       { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/a.js' } }, // redundant
-      { type: 'tool_use', id: 't3', name: 'Bash', input: {} },
+      { type: 'tool_use', id: 't3', name: 'Bash', input: { command: 'boom' } },
     ] }),
     userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't3', is_error: true }] }),
-    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: {} }] }), // retry of t3
+    asstTools({ id: 'm2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: { command: 'boom' } }] }), // retry of t3
   ].join('\n'), { sessionId: 's', project: 'p' });
   const sub = parseSession([
-    asstTools({ id: 's1', blocks: [{ type: 'tool_use', id: 'u1', name: 'Bash', input: {} }] }),
+    asstTools({ id: 's1', blocks: [{ type: 'tool_use', id: 'u1', name: 'Bash', input: { command: 'boom' } }] }),
     userResults({ blocks: [{ type: 'tool_result', tool_use_id: 'u1', is_error: true }] }),
-    asstTools({ id: 's2', blocks: [{ type: 'tool_use', id: 'u2', name: 'Bash', input: {} }] }), // retry of u1
+    asstTools({ id: 's2', blocks: [{ type: 'tool_use', id: 'u2', name: 'Bash', input: { command: 'boom' } }] }), // retry of u1
   ].join('\n'), { sessionId: 's', project: 'p' });
   const merged = mergeSessionAggregates([main, sub]);
   assert.strictEqual(merged.waste.toolCallCount, 6);
@@ -535,15 +668,15 @@ test('buildResponse aggregates waste and byProject across sessions in different 
     asstTools({ id: 'a1', cwd: '/w/alpha', blocks: [
       { type: 'tool_use', id: 't1', name: 'Read', input: { file_path: '/w/alpha/x.js' } },
       { type: 'tool_use', id: 't2', name: 'Read', input: { file_path: '/w/alpha/x.js' } }, // redundant
-      { type: 'tool_use', id: 't3', name: 'Bash', input: {} },
+      { type: 'tool_use', id: 't3', name: 'Bash', input: { command: 'boom' } },
     ] }),
     userResults({ blocks: [{ type: 'tool_result', tool_use_id: 't3', is_error: true }] }),
-    asstTools({ id: 'a2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: {} }] }), // retry of t3
+    asstTools({ id: 'a2', blocks: [{ type: 'tool_use', id: 't4', name: 'Bash', input: { command: 'boom' } }] }), // retry of t3
   ].join('\n'), { sessionId: 'A', project: 'p' });
   const projB = parseSession([
     asstTools({ id: 'b1', cwd: '/w/beta', blocks: [
       { type: 'tool_use', id: 'u1', name: 'Edit', input: { file_path: '/w/beta/y.js' } },
-      { type: 'tool_use', id: 'u2', name: 'Bash', input: {} },
+      { type: 'tool_use', id: 'u2', name: 'Bash', input: { command: 'boom' } },
     ] }),
     userResults({ blocks: [
       { type: 'tool_result', tool_use_id: 'u1', is_error: true },
@@ -551,7 +684,7 @@ test('buildResponse aggregates waste and byProject across sessions in different 
     ] }),
     asstTools({ id: 'b2', blocks: [
       { type: 'tool_use', id: 'u3', name: 'Edit', input: { file_path: '/w/beta/y.js' } }, // retry of u1
-      { type: 'tool_use', id: 'u4', name: 'Bash', input: {} }, // retry of u2
+      { type: 'tool_use', id: 'u4', name: 'Bash', input: { command: 'boom' } }, // retry of u2
     ] }),
   ].join('\n'), { sessionId: 'B', project: 'p' });
 
@@ -578,11 +711,11 @@ test('buildResponse aggregates waste into a per-day trend, merged across project
   ].join('\n'), { sessionId: 'A', project: 'p' });
   const projB = parseSession([
     asstTools({ id: 'b1', ts: '2026-07-01T11:00:00.000Z', cwd: '/w/beta', blocks: [
-      { type: 'tool_use', id: 'u1', name: 'Bash', input: {} },
+      { type: 'tool_use', id: 'u1', name: 'Bash', input: { command: 'boom' } },
     ] }),
     userResults({ ts: '2026-07-01T11:01:00.000Z', blocks: [{ type: 'tool_result', tool_use_id: 'u1', is_error: true }] }),
     asstTools({ id: 'b2', ts: '2026-07-02T09:00:00.000Z', blocks: [
-      { type: 'tool_use', id: 'u2', name: 'Bash', input: {} }, // retry, day 2 — waste attributed to retry's day
+      { type: 'tool_use', id: 'u2', name: 'Bash', input: { command: 'boom' } }, // retry, day 2 — waste attributed to retry's day
     ] }),
   ].join('\n'), { sessionId: 'B', project: 'p' });
 

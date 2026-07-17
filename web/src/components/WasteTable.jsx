@@ -110,6 +110,37 @@ export default function WasteTable({ rows }) {
         </>
       )}
 
+      {rows.errorSamples && rows.errorSamples.length > 0 && (
+        <>
+          <h2 className="section-label">What the errors were</h2>
+          <p className="waste-method">
+            A few concrete examples per failure kind — the command or file that
+            failed and the message it returned. Recognizable credentials (keyed
+            flags, tokens, auth headers) are redacted — review before sharing.
+          </p>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tool</th>
+                  <th>Command / target</th>
+                  <th>What went wrong</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.errorSamples.map((e, i) => (
+                  <tr key={`${e.tool}-${e.reason}-${i}`}>
+                    <td>{e.tool}</td>
+                    <td><code title={e.target}>{e.target || '—'}</code></td>
+                    <td title={e.text}>{REASON_LABELS[e.reason] || e.reason}{e.text ? `: ${e.text}` : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {rows.topDuplicateFiles.length > 0 && (
         <>
           <h2 className="section-label">Most re-read files</h2>

@@ -7,6 +7,9 @@ const { buildResponse, buildReport, parseTurns, attributeSubagentTurns } = requi
 const { createStore, loadConfig, sessionKeyFor } = require('./lib/scan');
 
 const PORT = process.env.PORT || 3456;
+// Loopback-only: this dashboard has no auth, so binding wider would expose
+// project paths, prompts, and error samples to anyone on the LAN.
+const HOST = '127.0.0.1';
 const DIST_DIR = path.join(__dirname, 'web', 'dist');
 const INDEX_HTML = path.join(DIST_DIR, 'index.html');
 const MIME = {
@@ -116,7 +119,7 @@ function start() {
     }
     throw err;
   });
-  server.listen(PORT, () => {
+  server.listen(PORT, HOST, () => {
     console.log(`Dashboard: http://localhost:${PORT} (${store.size} session files)`);
   });
 }
@@ -125,4 +128,4 @@ if (require.main === module) {
   start();
 }
 
-module.exports = { sessionKeyFor, resolveAssetPath };
+module.exports = { sessionKeyFor, resolveAssetPath, server, HOST };

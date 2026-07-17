@@ -266,6 +266,7 @@ test('advisor rule 1: low cache ratio fires below 0.5 with non-trivial volume, n
   const small = fakeSession({ sessionId: 'r1-small', costUSD: 2, tokens: { ...emptyTok(), input: 19000, cacheRead: 1000 } });
   const a = advisorById(buildResponse([fire, thresh, nocost, small]));
   assert.deepStrictEqual(a['r1-fire'].reasons, [{
+    rule: 'low-cache-hit',
     text: 'Low cache hit ratio (5%) — context likely rebuilt repeatedly',
     action: 'Run /clear between unrelated tasks so context is served from cache instead of rebuilt.',
   }]);
@@ -277,6 +278,7 @@ test('advisor rule 1: low cache ratio fires below 0.5 with non-trivial volume, n
 
 test('advisor rule 2: any top-tier model on a short session flags; est saving = premiumCost * 0.7', () => {
   const MSG = {
+    rule: 'premium-model-short-session',
     text: 'Premium model on a short session — a cheaper model likely sufficient (est. save $3.50)',
     action: 'Route short or simple tasks to a cheaper model (Sonnet) via /model.',
   };
@@ -303,6 +305,7 @@ test('advisor rule 3: subagent-heavy fires above 0.6 and cost >= 5, not at thres
   const nocost = fakeSession({ sessionId: 'r3-cost', costUSD: 4, subagentCostUSD: 4 });
   const a = advisorById(buildResponse([fire, nofire, nocost]));
   assert.deepStrictEqual(a['r3-fire'].reasons, [{
+    rule: 'subagent-heavy',
     text: '67% of cost from subagents ($4.00) — check delegation value',
     action: 'Check the fan-out earned its cost — try fewer subagents or a single-agent pass.',
   }]);

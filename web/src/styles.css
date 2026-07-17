@@ -16,6 +16,7 @@
   --accent-chart: #5b8def;
   --accent-soft: rgba(91, 141, 239, 0.12);
   --good: #1f8a55;
+  --danger: #c1443c;
 
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -38,6 +39,7 @@
     --accent-chart: #5b8def;
     --accent-soft: rgba(91, 141, 239, 0.16);
     --good: #47b37e;
+    --danger: #e0776f;
   }
 }
 
@@ -364,6 +366,13 @@ tr.detail > td { background: var(--surface-2); padding: 0; }
 .chart-wrap .grid-line { stroke: var(--border); stroke-width: 1; }
 .chart-wrap .bar { fill: var(--accent-chart); transition: fill 0.1s; }
 .chart-wrap .bar.is-hover { fill: var(--accent); }
+.chart-wrap .bar-error { fill: var(--danger); }
+.chart-wrap .bar-redundant { fill: var(--accent-chart); }
+.chart-legend { color: var(--muted); font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+.chart-legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-left: 10px; }
+.chart-legend .dot:first-child { margin-left: 0; }
+.chart-legend .dot-error { background: var(--danger); }
+.chart-legend .dot-redundant { background: var(--accent-chart); }
 .tooltip {
   position: absolute;
   pointer-events: none;

@@ -1,4 +1,20 @@
 import { shortProject } from '../format.js';
+import WasteTrend from './WasteTrend.jsx';
+
+// Human labels for the reason slugs classifyErrorReason() (lib/core.js) emits.
+// 'other' covers everything not confidently matched (e.g. a bare shell exit
+// code) — left uncategorized rather than guessed.
+const REASON_LABELS = {
+  'edit-before-read': 'Edited a file before reading it',
+  'edit-string-not-found': 'Edit: replacement text not found',
+  'stale-read': 'File changed since it was read',
+  'file-not-found': 'File does not exist',
+  'user-rejected': 'Rejected by user',
+  'auto-mode-denied': 'Blocked by auto mode',
+  'model-unavailable': 'Model temporarily unavailable',
+  'cwd-deleted': 'Working directory was deleted',
+  other: 'Other (e.g. shell exit code)',
+};
 
 // A one-liner shown in both states so a first-time viewer knows what "waste"
 // means and why the counts matter before reading any number.
@@ -13,8 +29,10 @@ function Intro() {
       </p>
       <p className="waste-method">
         How it&apos;s measured: an errored tool call is a tool result the log marks
-        as an error; a redundant read is the same file read again with no edit in
-        between (re-reading after an edit is expected, so it isn&apos;t counted).
+        as an error, counted only when the same tool is called again afterward
+        (a retry); a redundant read is the same file read whole again with no
+        edit or shell command in between (partial reads and re-reads after a
+        change are expected, so they aren&apos;t counted).
       </p>
     </>
   );
@@ -42,6 +60,8 @@ export default function WasteTable({ rows }) {
         {rows.duplicateFileCount === 1 ? '' : 's'}.
       </p>
 
+      <WasteTrend trend={rows.trend} />
+
       {rows.erroredByTool.length > 0 && (
         <>
           <h2 className="section-label">Errored tool calls by tool</h2>
@@ -58,6 +78,30 @@ export default function WasteTable({ rows }) {
                   <tr key={t.name}>
                     <td>{t.name}</td>
                     <td className="num">{t.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {rows.erroredByReason.length > 0 && (
+        <>
+          <h2 className="section-label">Errored tool calls by reason</h2>
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reason</th>
+                  <th className="num">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.erroredByReason.map((r) => (
+                  <tr key={r.reason}>
+                    <td>{REASON_LABELS[r.reason] || r.reason}</td>
+                    <td className="num">{r.count}</td>
                   </tr>
                 ))}
               </tbody>

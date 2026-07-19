@@ -4,6 +4,21 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.2.0] - 2026-07-19
+
+### Changed
+- Visual redesign — "The Instrument" direction. Moved to Tailwind CSS v4;
+  IBM Plex Sans/Mono type, a signature graticule tick ruler, and categorical
+  dataviz colors (validated for light and dark) replace the prior statement
+  palette.
+
+### Added
+- Sessions tab now shows cost as a magnitude bar (not just a number) at every
+  level: the session list, the per-model breakdown in a session's detail, and
+  the per-prompt timeline — so the expensive session, model, or prompt jumps
+  out visually instead of requiring digit-scanning. The per-prompt bar is
+  stacked to show subagent cost separately from direct cost.
+
 ## [2.1.0] - 2026-07-17
 
 ### Changed

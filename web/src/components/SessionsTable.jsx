@@ -36,7 +36,7 @@ function Turn({ t, maxCost }) {
             : fmtUSD(t.costUSD)
         }
       >
-        <div className="h-full bg-chart" style={{ width: mainPct + '%' }} />
+        <div className="h-full min-w-[2px] bg-chart" style={{ width: mainPct + '%' }} />
         {t.subagentCostUSD > 0 && <div className="h-full bg-accent" style={{ width: subPct + '%' }} />}
       </div>
       <div

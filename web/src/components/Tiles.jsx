@@ -6,7 +6,7 @@ function monthName(month) {
 }
 
 export default function Tiles({ summary, roi }) {
-  const readShare = summary.totalTokens ? summary.cacheReadTokens / summary.totalTokens : 0;
+  const readShare = summary.totalTokens ? summary.tokenMix.cacheRead / summary.totalTokens : 0;
   const heroCost = fmtUSD(summary.totalCostUSD).replace('$', '');
   const last = roi.months[roi.months.length - 1];
   const ceiling = Math.max(1, ...roi.months.map((m) => m.multiple));

@@ -7,6 +7,7 @@ import ReportControl from './components/ReportControl.jsx';
 import ProjectsTable from './components/ProjectsTable.jsx';
 import ModelsTable from './components/ModelsTable.jsx';
 import BreakdownBars from './components/BreakdownBars.jsx';
+import TokenMix from './components/TokenMix.jsx';
 import ModelSplit from './components/ModelSplit.jsx';
 import AdvisorTable from './components/AdvisorTable.jsx';
 import SessionsTable from './components/SessionsTable.jsx';
@@ -76,6 +77,9 @@ export default function App() {
           {tab === 'overview' && (
             <>
               <Tiles summary={data.summary} roi={data.roi} />
+              <h2 className="section-label">Token mix</h2>
+              <p className="section-note">What your token volume is made of. Cache reads are the cheap bulk; everything else is fresh context you paid full rate to send or generate.</p>
+              <TokenMix tokenMix={data.summary.tokenMix} totalTokens={data.summary.totalTokens} />
               <h2 className="section-label">Spend</h2>
               <p className="section-note">Your daily spend over time. Switch to weekly or monthly, and hover any bar for the exact figure.</p>
               <DailyChart daily={data.daily} />

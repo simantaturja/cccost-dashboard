@@ -4,6 +4,26 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.3.0] - 2026-08-25
+
+### Fixed
+- Claude Sonnet 5 usage was billed at $3/$15 per million tokens. The correct
+  rate is $2/$10 — the launch pricing is now the standard price — so every
+  Sonnet 5 figure in the dashboard was 1.5x too high. Sonnet 4.6 and 4.5 were
+  always correct and are unchanged.
+- Fast-mode messages are now priced at the premium fast-mode rate ($10/$50 per
+  million tokens for Opus) instead of the standard rate, so a session run with
+  `/fast` is no longer undercounted by half.
+
+### Added
+- A token mix bar on the overview, splitting your total token volume into
+  input, output, cache writes, and cache reads — so the cheap bulk (cache
+  reads) is separated from the fresh context you pay full rate for.
+
+### Changed
+- The JSON API returns `summary.tokenMix` (input / output / cacheWrite /
+  cacheRead) in place of `summary.cacheReadTokens`.
+
 ## [2.2.0] - 2026-07-19
 
 ### Changed

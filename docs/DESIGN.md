@@ -36,8 +36,10 @@ on disk.
 
 Pricing lives in one table, `PRICING` in `lib/core.js`, in USD per 1M tokens.
 Models are matched by substring (`claude-opus-4-8` → the `opus` row), so new point
-releases usually need no change. An unmatched model is priced at $0 and counted in
-diagnostics.
+releases usually need no change; rows are ordered most-specific-first, since a
+release that breaks its family's price (`sonnet-5`) needs its own row above the
+family row. An unmatched model is priced at $0 and counted in diagnostics.
+Messages carrying `usage.speed: 'fast'` are priced from the row's `fast` tier.
 
 Per message:
 
@@ -86,6 +88,12 @@ summary tiles, `byProject`, `byModel`, `daily`, `monthly`, `roi`, `advisor`, and
 the session list. The Overview spend chart re-buckets `daily` into day / week /
 month views client-side; `/api/report` renders a total-only monthly summary from
 `monthly`.
+
+`summary.tokenMix` partitions `summary.totalTokens` into `input`, `output`,
+`cacheWrite`, `cacheRead`. The two cache-write TTLs are collapsed into one bucket
+— the split is a pricing detail, already reflected in cost — so the four buckets
+sum exactly to `totalTokens`. Fresh (non-cached) volume is `totalTokens -
+tokenMix.cacheRead`.
 
 ## Efficiency advisor
 

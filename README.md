@@ -182,7 +182,8 @@ will produce some false positives.
   messages carry `usage`. Subagent files under a session's directory are merged in.
 - **Pricing** — a table in `lib/core.js` (`PRICING`), USD per 1M tokens. Cache
   writes are priced per TTL (5-minute = 1.25× input, 1-hour = 2× input); cache
-  reads at 0.1× input. Update the table when Anthropic pricing changes.
+  reads at 0.1× input. Fast-mode messages (`usage.speed: 'fast'`) use the row's
+  `fast` tier. Update the table when Anthropic pricing changes.
 - **Dedup** — streaming writes the same `message.id` multiple times; the last
   (complete) occurrence wins.
 - **Time** — days and months bucket by the machine's **local** calendar date, so

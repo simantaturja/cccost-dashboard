@@ -128,7 +128,6 @@ test('buildResponse rolls up summary, projects, models, daily', () => {
   assert.strictEqual(r.summary.projectCount, 1);
   assert.ok(Math.abs(r.summary.totalCostUSD - EXPECTED_COST) < 1e-9);
   assert.strictEqual(r.summary.totalTokens, 1109 + 220 + 430 + 600 + 5040);
-  assert.strictEqual(r.summary.cacheReadTokens, 5040);
   // savings: opus 5000*(5-0.5)/1e6 + fable 40*(10-1)/1e6 = 0.0225 + 0.00036
   assert.ok(Math.abs(r.summary.cacheSavingsUSD - (0.0225 + 0.00036)) < 1e-9);
   assert.strictEqual(r.byProject[0].project, '/Users/x/proj');
@@ -136,6 +135,21 @@ test('buildResponse rolls up summary, projects, models, daily', () => {
   assert.strictEqual(r.daily.length, 2);
   assert.strictEqual(r.daily[0].date, '2026-07-01'); // ascending
   assert.strictEqual(r.sessions.length, 1);
+});
+
+test('buildResponse tokenMix splits totalTokens into four buckets, cache writes collapsed', () => {
+  const s = parseSession(fixture, { sessionId: 'sess-1', project: 'dir-name' });
+  const { tokenMix, totalTokens } = buildResponse([s]).summary;
+  assert.deepStrictEqual(tokenMix, {
+    input: 1109,
+    output: 220,
+    cacheWrite: 430 + 600, // 5m + 1h collapsed
+    cacheRead: 5040,
+  });
+  // The four buckets are a partition of totalTokens — nothing double-counted,
+  // nothing dropped.
+  const sum = tokenMix.input + tokenMix.output + tokenMix.cacheWrite + tokenMix.cacheRead;
+  assert.strictEqual(sum, totalTokens);
 });
 
 test('mergeSessionAggregates combines a session file with its subagent files', () => {
@@ -788,4 +802,64 @@ test('waste: erroredByReason is attributed at retry time and aggregated in build
 
   const r = buildResponse([s]);
   assert.deepStrictEqual(r.waste.erroredByReason, [{ reason: 'edit-string-not-found', count: 1 }]);
+});
+
+test('getRates: Sonnet 5 is priced below older Sonnets (specific match wins)', () => {
+  assert.deepStrictEqual(getRates('claude-sonnet-5'), {
+    input: 2, output: 10, write5m: 2.5, write1h: 4, read: 0.2,
+  });
+  assert.strictEqual(getRates('claude-sonnet-4-6').input, 3);
+  assert.strictEqual(getRates('claude-sonnet-4-5-20250929').output, 15);
+});
+
+test('getRates: fast mode prices Opus at the premium tier, standard speed unchanged', () => {
+  assert.deepStrictEqual(getRates('claude-opus-5', 'fast'), {
+    input: 10, output: 50, write5m: 12.5, write1h: 20, read: 1,
+  });
+  assert.strictEqual(getRates('claude-opus-5', 'standard').input, 5);
+  assert.strictEqual(getRates('claude-opus-5').input, 5);
+  // No fast tier for other families — a recorded speed must not change their price.
+  assert.strictEqual(getRates('claude-sonnet-5', 'fast').input, 2);
+  assert.strictEqual(getRates('claude-haiku-4-5', 'fast').output, 5);
+  assert.strictEqual(getRates('weird-model', 'fast'), null);
+});
+
+const fastOpusLine = JSON.stringify({
+  type: 'assistant',
+  timestamp: '2026-07-01T10:00:00.000Z',
+  message: {
+    id: 'msg_fast',
+    model: 'claude-opus-5',
+    usage: { input_tokens: 100, output_tokens: 200, cache_read_input_tokens: 1000, speed: 'fast' },
+  },
+});
+
+test('parseSession prices a fast-mode message at fast rates', () => {
+  const s = parseSession(fastOpusLine, { sessionId: 'sess-fast', project: 'p' });
+  // 100*10 + 200*50 + 1000*1 = 12000 /1e6
+  assert.ok(Math.abs(s.costUSD - 0.012) < 1e-12, `got ${s.costUSD}`);
+  assert.ok(Math.abs(s.models['claude-opus-5'].costUSD - 0.012) < 1e-12);
+});
+
+test('parseTurns and subagent attribution price fast-mode messages at fast rates', () => {
+  const prompt = JSON.stringify({
+    type: 'user',
+    timestamp: '2026-07-01T09:00:00.000Z',
+    message: { role: 'user', content: 'do a thing' },
+  });
+  const turns = parseTurns([prompt, fastOpusLine].join('\n'));
+  assert.strictEqual(turns.length, 1);
+  assert.ok(Math.abs(turns[0].costUSD - 0.012) < 1e-12, `got ${turns[0].costUSD}`);
+
+  const sub = JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-07-01T09:30:00.000Z',
+    message: {
+      id: 'msg_sub_fast',
+      model: 'claude-opus-5',
+      usage: { input_tokens: 100, speed: 'fast' },
+    },
+  });
+  attributeSubagentTurns(turns, sub);
+  assert.ok(Math.abs(turns[0].subagentCostUSD - 0.001) < 1e-12, `got ${turns[0].subagentCostUSD}`);
 });

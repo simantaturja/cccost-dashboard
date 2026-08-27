@@ -25,9 +25,10 @@ sketched; each gets its own spec when its turn comes.
 
 ## Human gate
 
-**The loop stops at a draft PR.** It may create branches, worktrees, commits,
-issues, and draft PRs. It may not merge, push to master, publish to npm, or
-release the extension. Every line that ships is read by a human first.
+**The loop stops at a draft PR.** It may create issues, worktrees, commits on a
+`loop/<slug>` branch, push that branch, and open a draft PR against master. It
+may not merge, commit or push to master, publish to npm, or release the
+extension. Every line that ships is read by a human first.
 
 ## Current state (verified 2026-08-27)
 
@@ -97,9 +98,12 @@ matched a pricing entry.
 
 Two state artifacts, by design:
 
-- `.loop/log.md` — the loop's running memory. Every run appends what it
-  checked, when, and what it decided *not* to file and why. This is what stops
-  the watchdog re-reporting the same non-issue nightly.
+- `.loop/log.md` — the loop's running memory, **tracked in git**. Every run
+  appends what it checked, when, and what it decided *not* to file and why.
+  This is what stops the watchdog re-reporting the same non-issue nightly. It
+  is committed on the `loop/<slug>` branch when the run files something, and
+  directly on a `loop/log-<date>` branch when the run is quiet — never on
+  master, so the human gate holds even for a no-op run.
 - **GitHub Issues** labeled `loop:watchdog` / `loop:audit` / `loop:triage` —
   the actionable queue. Survives machine loss, triageable from a phone, and it
   fills the empty queue that lane 3 needs.
@@ -111,7 +115,9 @@ Two state artifacts, by design:
 - `.gitignore`: replace blanket `.claude/` with `.claude/settings.local.json`.
   Commit the three existing skills. Un-ignore `docs/superpowers/` — the specs
   and plans are the design record and the loop reads them.
-- Root `AGENTS.md`, with a `CLAUDE.md` pointing at it. Contents:
+- Root `AGENTS.md` holds the conventions. Root `CLAUDE.md` is a one-line file
+  pointing at it — a real file, not a symlink, so it survives every checkout.
+  `AGENTS.md` contents:
   - node >= 20.19; `npm test` is `node --test`; frontend must be built first
   - two artifacts ship in lockstep: the npm package and `extension/`
   - `PRICING` lives in `lib/core.js`; `demo/projects` is the fixture set

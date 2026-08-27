@@ -16,12 +16,16 @@ the loop does the grunt work and always stops before merge.
 Four lanes were requested. They share one substrate and ship in order:
 
 1. **Watchdog** — pricing/model/log-format drift (first)
-2. **Self-audit** — UI regressions, untested branches, dead code
-3. **Issue autopilot** — GitHub issues to draft PRs
+2. **Issue autopilot** — GitHub issues to draft PRs
+3. **Self-audit** — UI regressions, untested branches, dead code
 4. **Feature engine** — roadmap item to draft PR
 
-This spec covers the substrate (Phases 0-3) and lane 1 in full. Lanes 2-4 are
-sketched; each gets its own spec when its turn comes.
+The watchdog ships first because it *feeds* the issue tracker: its findings are
+the first real input the autopilot consumes, so lane 1 dogfoods lane 2's queue
+rather than lane 2 waiting on strangers.
+
+This spec covers the substrate (Phases 0-2) and lanes 1-2 in full (Phases 3-4).
+Lanes 3-4 are sketched; each gets its own spec when its turn comes.
 
 ## Human gate
 
@@ -106,7 +110,27 @@ Two state artifacts, by design:
   master, so the human gate holds even for a no-op run.
 - **GitHub Issues** labeled `loop:watchdog` / `loop:audit` / `loop:triage` —
   the actionable queue. Survives machine loss, triageable from a phone, and it
-  fills the empty queue that lane 3 needs.
+  fills the empty queue the autopilot needs. A separate `loop:go` label is the
+  autopilot's trigger (see Phase 4).
+
+## Runners
+
+Hybrid, because the two lanes need different things:
+
+| Lane | Runner | Why |
+|---|---|---|
+| Watchdog | local Claude Code cron, daily | checks 1 and 3 need real `~/.claude` transcripts; CI never sees them |
+| Issue autopilot | GitHub Actions, event-driven | needs no local data; must work while the Mac sleeps; GitHub already pushes the event, so nothing polls |
+
+Both authenticate with `CLAUDE_CODE_OAUTH_TOKEN`, not `ANTHROPIC_API_KEY` — the
+action supports subscription auth, so the cloud runner costs no API credits.
+
+**Assumption to verify at Phase 4, not to build on.** The action's docs describe
+a `settings` input and a plugin mechanism; they do *not* document auto-loading
+`.claude/skills` or `.claude/agents` from the checkout. It likely works, since
+the action runs Claude Code against a checkout. The workflow therefore names the
+skill and agent files by path in its `prompt` input, so the run reads them as
+files regardless of whether they auto-load.
 
 ## Phase 0 — make agent knowledge versioned
 
@@ -195,20 +219,56 @@ Dedup before filing: read `.loop/log.md` and `gh issue list --label
 loop:watchdog --state all`. Every run appends to `.loop/log.md` whether or not
 it files.
 
-Cadence: local Claude Code scheduled automation, daily. Chosen over GitHub
-Actions because checks 1 and 3 need real `~/.claude` transcripts, which CI never
-sees; it also runs on the existing subscription rather than API credits. Cost:
-it only fires while the machine is awake.
+Cadence: local Claude Code scheduled automation, daily. Only fires while the
+machine is awake — acceptable for drift detection, which has no deadline.
 
 **Verify:** seed a scratch JSONL with a fabricated model ID; first run files
 exactly one issue and appends one log entry; second run files zero.
 
-## Lanes 2-4 (later, one spec each)
+## Phase 4 — issue autopilot
+
+~1.5 agentic hours. Requires Phases 0-2.
+
+`.github/workflows/loop-issue.yml`, using `anthropics/claude-code-action`:
+
+```yaml
+on:
+  issues:
+    types: [labeled]
+```
+
+**The trigger is label-gated, deliberately.** This repo is public, so
+`types: [opened]` would let any stranger's issue text start a privileged run
+holding `contents: write` and `pull-requests: write` — a prompt-injection and
+run-abuse surface, since the issue body is untrusted text entering the agent's
+prompt. Instead: anyone may open an issue and nothing fires; the run starts only
+when a maintainer applies the `loop:go` label. The workflow additionally guards
+on `github.event.label.name == 'loop:go'` and on the labeling actor's
+association, so applying the label is the authorising act.
+
+The issue body is passed to the agent as **data to be triaged, never as
+instructions**, and the prompt says so explicitly.
+
+Workflow shape:
+- checkout, node 20, `npm --prefix web ci`, `npm run build`
+- `npx playwright install --with-deps chromium` (the UI gate needs a browser)
+- run the action with `claude_code_oauth_token`, a `prompt` that names
+  `.claude/skills/issue-to-pr/SKILL.md` and the two agent files by path
+- permissions: `contents: write`, `pull-requests: write`, `issues: write`
+- concurrency group keyed on the issue number, so relabelling cannot start a
+  second run against the same issue
+
+The run follows the same path as the watchdog: worktree, drafter, `npm run
+verify`, verifier, draft PR. It never merges.
+
+**Verify:** open a test issue, apply `loop:go`, confirm exactly one run starts,
+a draft PR appears linked to the issue, and CI is green on it. Confirm that
+opening an issue *without* the label starts nothing.
+
+## Lanes 3-4 (later, one spec each)
 
 - **Self-audit** — untested branches in `lib/core.js`, `web/src` UI regressions
   against committed baselines, dead code. Needs Phase 1's UI gate first.
-- **Issue autopilot** — extend the existing `issue-to-pr` skill to run
-  unattended under the drafter/verifier split. Its queue is fed by lanes 1-2.
 - **Feature engine** — `cccost-product-owner` picks the next roadmap item; the
   drafter builds it. Highest comprehension-debt risk; last on purpose.
 
@@ -224,15 +284,27 @@ exactly one issue and appends one log entry; second run files zero.
 - **Baseline churn.** Committed screenshots go stale on intentional UI changes.
   Updating a baseline is a human commit, never a loop commit.
 - **Silent sleep.** Local cron misses days when the machine is off. Acceptable
-  for a drift watchdog; not acceptable later for lane 3.
+  for a drift watchdog, which is why the issue lane runs on Actions instead.
+- **Prompt injection via issue text.** Mitigated by the `loop:go` label gate —
+  untrusted text never starts a run — and by the draft-PR gate. The residual
+  risk is a maintainer labelling a hostile issue without reading it.
+- **Two runners to keep coherent.** Local cron and Actions must agree on the
+  same `.loop/log.md` and label conventions, and drift between them is a real
+  maintenance cost accepted in exchange for the issue lane surviving a sleeping
+  laptop.
 
 ## Non-goals
 
-No auto-merge. No auto-release. No cloud runner in this phase. No MCP server —
-`gh` covers the tracker. No coverage threshold gate; risk-ranked tests instead.
+No auto-merge. No auto-release. No polling of the GitHub API — the issue lane is
+event-driven. No MCP server — `gh` covers the tracker. No coverage threshold
+gate; risk-ranked tests instead.
 
-## Open item
+## Open items
 
-The exact local scheduling mechanism (Claude Code cron/automation invocation and
-its working-directory semantics) is confirmed at Phase 3 implementation, not
-assumed here.
+Both are confirmed at implementation, not assumed here:
+
+1. The exact local scheduling mechanism for Phase 3 — Claude Code
+   cron/automation invocation and its working-directory semantics.
+2. Whether `anthropics/claude-code-action` auto-loads `.claude/skills` and
+   `.claude/agents` from the checkout (Phase 4). The design does not depend on
+   it either way; confirming it only lets the `prompt` get shorter.

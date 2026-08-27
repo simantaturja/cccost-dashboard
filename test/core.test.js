@@ -6,7 +6,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   parseSession, buildResponse, mergeSessionAggregates, getRates,
-  buildReport, DEFAULT_CONFIG, parseTurns, attributeSubagentTurns, classifyErrorReason,
+  buildReport, parseTurns, attributeSubagentTurns, classifyErrorReason,
   redactSecrets,
 } = require('../lib/core');
 

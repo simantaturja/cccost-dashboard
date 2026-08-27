@@ -15,7 +15,9 @@ if (IN_WEBVIEW) {
     const msg = e.data;
     if (!msg || msg.__cccost !== true) return;
     if (msg.type === 'dataChanged') {
-      dataChangedSubs.forEach((cb) => cb());
+      dataChangedSubs.forEach((cb) => {
+        cb();
+      });
       return;
     }
     const p = pending.get(msg.id);

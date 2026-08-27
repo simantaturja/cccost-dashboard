@@ -20,7 +20,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "in=$(cat); f=$(jq -r '.tool_input.file_path // \"\"' <<<\"$in\"); case \"$f\" in */web/src/*) echo 'web/src changed — npm run test:ui must pass before this is done.' ;; esac; exit 0",
+            "command": "in=$(cat); f=$(jq -r '.tool_input.file_path // \"\"' <<<\"$in\"); case \"$f\" in */web/src/*) echo 'web/src changed \u2014 npm run test:ui must pass before this is done.' ;; esac; exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "in=$(cat); c=$(jq -r '.tool_input.command // \"\"' <<<\"$in\"); if printf '%s' \"$c\" | grep -Eq -- '(--add-label|--label)[ =][^ ]*loop:(go|build)'; then echo \"Applying loop:go or loop:build is a human gate (gate 1 / gate 2). Refusing.\" >&2; exit 2; fi; exit 0",
             "timeout": 10
           }
         ]

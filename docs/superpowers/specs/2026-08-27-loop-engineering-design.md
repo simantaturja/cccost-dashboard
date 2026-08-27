@@ -289,18 +289,31 @@ The verifier's lack of Edit/Write is genuinely structural: it cannot fix what it
 is judging, so it cannot launder its own approval. It runs twice per feature:
 once on the design PR (Phase 5) and once on the implementation diff (Phase 6).
 
-**Deny-list, stated in both agent definitions and enforced two ways.**
-`npm publish`, `gh pr merge`, and `gh pr review` are **structural**: they sit in
-`permissions.deny` in the committed `.claude/settings.json`, which binds a
-subagent even when its frontmatter grants the tool — `loop-verifier` holding
-Bash does not reopen them. Merging a PR, committing or pushing to `master`,
-running `vsce publish`, editing a committed screenshot baseline, and applying a
-`loop:build` or `loop:go` label are **instruction-only**: `Bash` remains a
-residual write path for `loop-verifier`, and these are prevented by the agent
-definitions' prose, not by tool grants — deliberately, since denying
-`git push origin master` or `vsce publish` outright would break the user's own
-`/release` flow. Phase 3 must close the push and label holes before any
-unattended runner exists.
+**Deny-list, stated in both agent definitions and enforced three ways.**
+
+*Structural, via `permissions.deny`* in the committed `.claude/settings.json`,
+which binds a subagent even when its frontmatter grants the tool — `loop-verifier`
+holding Bash does not reopen them: `npm publish`, `gh pr merge`, `gh pr review`.
+
+*Structural, via a `PreToolUse` hook on `Bash`* that exits 2 on any command
+applying a `loop:go` or `loop:build` label. `permissions.deny` cannot express
+this — its patterns only wildcard at the end, so it cannot distinguish
+`--add-label loop:build` (a gate the loop must never pass) from
+`--label loop:watchdog` (a label the watchdog legitimately applies when filing).
+The hook reads `tool_input.command` and matches the label-applying flags only, so
+`gh issue list --search "label:loop:go"` and `--add-label loop:needs-review`
+still pass.
+
+*Instruction-only*, prevented by the agent definitions' prose rather than by tool
+grants: merging a PR, committing or pushing to `master`, running `vsce publish`,
+and editing a committed screenshot baseline. `Bash` remains a residual write path
+for `loop-verifier`. This is deliberate — denying `git push origin master` or
+`vsce publish` outright would break the user's own `/release` flow, which pushes
+master at step 7 and publishes the extension at step 9.
+
+**The push hole is still open.** Before an unattended runner exists, either
+close it with a `PreToolUse` matcher narrow enough to spare `/release`, or accept
+it explicitly and record why.
 
 ## Phase 0 — make agent knowledge versioned
 

@@ -143,12 +143,36 @@ Everything the loop needs, and which phase writes it.
 | `loop-pipeline` | **new** | 2 | The shared mechanics every lane repeats: dedup against `.loop/log.md` and open issues, open the worktree, hand off to the drafter, run `npm run verify`, hand off to the verifier, open the draft PR, append to `.loop/log.md`. Lane skills call this instead of each restating the pipeline. |
 | `loop-watchdog` | **new** | 3 | Lane 1's three drift checks. Decides *what* is a finding; `loop-pipeline` does what happens next. |
 | `loop-issue` | **new** | 4 | Lane 2's unattended single-issue path. |
-| `issue-to-pr` | exists, **one edit** | 0 | Committed as-is, plus one pointer line to `loop-issue` for the unattended path. |
+| `issue-to-pr` | exists, **frontmatter edit** | 0 | Committed, plus `disable-model-invocation: true`. User-only. |
 | `cccost-product-owner` | exists, unchanged | 0 | Committed. Lane 4 will use it later. |
-| `release` | exists, unchanged | 0 | Committed for human use. **The loop is never permitted to invoke it** — see the agent deny-list below. |
+| `release` | exists, **frontmatter edit** | 0 | Committed, plus `disable-model-invocation: true`. User-only. |
 
-**Why `loop-issue` is separate rather than a mode on `issue-to-pr`.** The
-existing skill states a hard rule: *"the verdict table is a stop. Never move
+### User-only skills
+
+`issue-to-pr` and `release` both carry `disable-model-invocation: true`, so only
+a human typing `/issue-to-pr` or `/release` can start them. Claude cannot invoke
+either, in this session or inside any loop run.
+
+This is the correct guard for `release` specifically: it publishes to npm and the
+VS Code Marketplace. The docs give exactly this case — *"Use this for workflows
+with side effects or that you want to control timing, like `/commit`, `/deploy`
+... You don't want Claude deciding to deploy because your code looks ready."*
+It also makes "no auto-release" enforced by the harness rather than by an
+instruction an agent might reason around.
+
+**Consequence for `loop-issue`.** It cannot *invoke* `issue-to-pr`. Where it
+reuses that skill's classification and evaluation stages, it does so by
+**reading the file as reference text** (`.claude/skills/issue-to-pr/SKILL.md`),
+which the field does not block — a plain file read, not an invocation. The lane
+skill must say this explicitly so nobody later "fixes" the reuse by re-enabling
+model invocation.
+
+The three `loop-*` skills stay invocable by both, deliberately: you need to be
+able to dry-run a lane by hand while building and debugging it.
+
+**Why `loop-issue` is separate rather than a mode on `issue-to-pr`.** Most
+directly: `issue-to-pr` is user-only, so a loop run cannot invoke it at all.
+Beyond that, the existing skill states a hard rule: *"the verdict table is a stop. Never move
 from triage into implementation without the user naming the issue to build."*
 Its Stage 1 also sweeps every open issue, whereas Phase 4 acts on exactly one.
 Adding an unattended mode would mean weakening that stop rule in the file that
@@ -170,20 +194,21 @@ structurally cannot fix what it is judging, so it cannot launder its own
 approval.
 
 **Deny-list, stated in both agent definitions.** Neither agent may: merge a PR,
-commit or push to master, invoke the `release` skill, run `npm publish` or
-`vsce publish`, or edit a committed screenshot baseline. The `release` skill
-lives in the same committed `.claude/skills/` the agents can read, so this
-exclusion is written into the agent files rather than left to inference.
+commit or push to master, run `npm publish` or `vsce publish`, or edit a
+committed screenshot baseline. `release` is already unreachable via
+`disable-model-invocation`; the deny-list covers the shell commands that field
+does not, since an agent with Bash could run `npm publish` without touching the
+skill at all.
 
 ## Phase 0 — make agent knowledge versioned
-
-~0.5 agentic hours.
 
 - `.gitignore`: replace blanket `.claude/` with `.claude/settings.local.json`.
   Commit the three existing skills. Un-ignore `docs/superpowers/` — the specs
   and plans are the design record and the loop reads them.
-- One edit to `issue-to-pr`: a line under its hard rule pointing at `loop-issue`
-  as the unattended path, so a later reader does not "fix" the stop rule.
+- Add `disable-model-invocation: true` to `issue-to-pr` and `release`, making
+  both user-only, and a line under `issue-to-pr`'s hard rule pointing at
+  `loop-issue` as the unattended path, so a later reader does not "fix" the
+  stop rule.
 - Root `AGENTS.md` holds the conventions. Root `CLAUDE.md` is a one-line file
   pointing at it — a real file, not a symlink, so it survives every checkout.
   `AGENTS.md` contents:
@@ -195,11 +220,12 @@ exclusion is written into the agent files rather than left to inference.
   - conventional commits, author only; never hand-edit `web/dist`
 
 **Verify:** a fresh clone contains `.claude/skills/`; `git check-ignore` reports
-only `settings.local.json` under `.claude/`.
+only `settings.local.json` under `.claude/`; `/release` and `/issue-to-pr` still
+work when typed, and neither is listed as model-invocable.
 
 ## Phase 1 — stopping conditions
 
-~2 agentic hours. Nothing in later phases may run until this is green.
+Nothing in later phases may run until this is green.
 
 **Linter.** Biome over ESLint: one binary, lint and format together, one config
 file. The repo currently has zero root devDependencies; keep it that way as far
@@ -230,8 +256,6 @@ stopping condition. CI gains matching `lint` and `ui` jobs.
 
 ## Phase 2 — role split and isolation
 
-~1.5 agentic hours.
-
 - `.claude/skills/loop-pipeline/SKILL.md` — the shared lane mechanics, written
   once here so `loop-watchdog` and `loop-issue` each stay a findings skill.
 - `.claude/agents/loop-drafter.md` — implements one finding. Tools: Read, Edit,
@@ -252,7 +276,7 @@ cannot edit: hand it a diff and check it reports rather than repairs.
 
 ## Phase 3 — watchdog lane and heartbeat
 
-~1.5 agentic hours. Requires Phases 0-2.
+Requires Phases 0-2.
 
 `.claude/skills/loop-watchdog/SKILL.md` decides findings; `loop-pipeline` acts
 on them. Checks, in order:
@@ -277,7 +301,7 @@ exactly one issue and appends one log entry; second run files zero.
 
 ## Phase 4 — issue autopilot
 
-~1.5 agentic hours. Requires Phases 0-2.
+Requires Phases 0-2.
 
 Writes `.claude/skills/loop-issue/SKILL.md` and
 `.github/workflows/loop-issue.yml`, using `anthropics/claude-code-action`:

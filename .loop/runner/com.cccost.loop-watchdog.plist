@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cccost.loop-watchdog</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>REPO_PATH/.loop/runner/watchdog.sh</string>
+  </array>
+
+  <!-- Daily. Off the hour on purpose: :00 is where every scheduler in the world
+       lands, and this job has no deadline. launchd fires a missed calendar
+       interval on wake, so a sleeping Mac delays the run rather than skipping it. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>47</integer>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>REPO_PATH</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>LOOP_REPO</key>
+    <string>REPO_PATH</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>REPO_PATH/.loop/runner/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>REPO_PATH/.loop/runner/logs/launchd.err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

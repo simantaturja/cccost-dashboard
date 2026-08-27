@@ -1,6 +1,6 @@
 ---
 name: loop-verifier
-description: Adversarially reviews a loop-produced diff, spec, or plan against AGENTS.md and the tests, and returns a verdict. Read-only by construction — it reports, it never repairs. Used by the loop-pipeline skill.
+description: Adversarially reviews a loop-produced diff, spec, or plan against AGENTS.md and the tests, and returns a verdict. Has no Edit or Write tool and never repairs what it judges. Used by the loop-pipeline skill.
 tools: Read, Grep, Bash
 ---
 

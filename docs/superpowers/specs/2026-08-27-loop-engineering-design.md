@@ -285,17 +285,22 @@ reference. The interactive skill is not weakened.
 | `loop-drafter` | 2 | Read, Edit, Write, Bash, Grep, Glob | inherits session model; default effort |
 | `loop-verifier` | 2 | **Read, Grep, Bash only** | inherits session model; high effort |
 
-The verifier's lack of Edit/Write is the enforcement, not a suggestion: it
-structurally cannot fix what it is judging, so it cannot launder its own
-approval. It runs twice per feature: once on the design PR (Phase 5) and once on
-the implementation diff (Phase 6).
+The verifier's lack of Edit/Write is genuinely structural: it cannot fix what it
+is judging, so it cannot launder its own approval. It runs twice per feature:
+once on the design PR (Phase 5) and once on the implementation diff (Phase 6).
 
-**Deny-list, stated in both agent definitions.** Neither agent may: merge a PR,
-commit or push to master, run `npm publish` or `vsce publish`, or edit a
-committed screenshot baseline. `release` is already unreachable via
-`disable-model-invocation`; the deny-list covers the shell commands that field
-does not, since an agent with Bash could run `npm publish` without touching the
-skill at all.
+**Deny-list, stated in both agent definitions and enforced two ways.**
+`npm publish`, `gh pr merge`, and `gh pr review` are **structural**: they sit in
+`permissions.deny` in the committed `.claude/settings.json`, which binds a
+subagent even when its frontmatter grants the tool — `loop-verifier` holding
+Bash does not reopen them. Merging a PR, committing or pushing to `master`,
+running `vsce publish`, editing a committed screenshot baseline, and applying a
+`loop:build` or `loop:go` label are **instruction-only**: `Bash` remains a
+residual write path for `loop-verifier`, and these are prevented by the agent
+definitions' prose, not by tool grants — deliberately, since denying
+`git push origin master` or `vsce publish` outright would break the user's own
+`/release` flow. Phase 3 must close the push and label holes before any
+unattended runner exists.
 
 ## Phase 0 — make agent knowledge versioned
 
@@ -359,9 +364,12 @@ stopping condition. CI gains matching `lint` and `ui` jobs.
   Write, Bash, Grep, Glob. Carries the deny-list above.
 - `.claude/agents/loop-verifier.md` — judges the diff against `AGENTS.md`, the
   project skills, and the tests. Tools: **Read, Grep, Bash only.** It cannot
-  edit, so it structurally cannot fix what it is judging. This is the article's
-  ideate-vs-verify split, enforced by tool grants rather than by instruction.
-  Carries the deny-list above.
+  edit, so it structurally cannot fix what it is judging — the article's
+  ideate-vs-verify split. `npm publish`, `gh pr merge`, and `gh pr review` are
+  also structurally blocked, via `permissions.deny` in `.claude/settings.json`;
+  the rest of its deny-list (push to `master`, `vsce publish`, applying a
+  `loop:build`/`loop:go` label) is enforced by prose only, since `Bash` is still
+  a residual write path.
 - Worktree per finding: `git worktree add ../cccost-loop/<slug>`, removed on
   completion.
 - `.claude/settings.json` (committed): a Stop hook running `npm run verify`, and

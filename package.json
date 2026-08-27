@@ -38,11 +38,13 @@
     "start": "node server.js",
     "build": "npm --prefix web run build",
     "test": "node --test",
+    "test:ui": "playwright test",
     "lint": "biome check .",
     "format": "biome check --write .",
     "prepublishOnly": "npm --prefix web ci && npm run build"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.10"
+    "@biomejs/biome": "2.5.10",
+    "@playwright/test": "1.62.1"
   }
 }

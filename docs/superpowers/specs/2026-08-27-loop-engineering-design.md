@@ -219,12 +219,33 @@ Hybrid, because the two lanes need different things:
 Both authenticate with `CLAUDE_CODE_OAUTH_TOKEN`, not `ANTHROPIC_API_KEY` — the
 action supports subscription auth, so the cloud runner costs no API credits.
 
-**Assumption to verify at Phase 4, not to build on.** The action's docs describe
-a `settings` input and a plugin mechanism; they do *not* document auto-loading
-`.claude/skills` or `.claude/agents` from the checkout. It likely works, since
-the action runs Claude Code against a checkout. The workflow therefore names the
-skill and agent files by path in its `prompt` input, so the run reads them as
-files regardless of whether they auto-load.
+**Action API, verified 2026-08-27 against `action.yml` on `main`** (pin `@v1`,
+then resolving to v1.0.207). Three of this spec's earlier assumptions were wrong:
+
+- There is **no `allowed_tools` input and no `model` input.** Tool and model
+  control go through `claude_args`, a passthrough for Claude Code CLI flags
+  (`--allowedTools`, `--disallowedTools`, `--model`, `--max-turns`,
+  `--append-system-prompt`). `claude_args` takes precedence over `settings`.
+- There is **no `mode` input** — it was removed, and execution mode is
+  auto-detected from workflow context. For a label-triggered run, `prompt` plus
+  an auth input is sufficient; `track_progress` is optional and unrelated.
+- `settings` accepts **inline JSON or a path**, not a path only.
+
+Confirmed as this spec assumed: `claude_code_oauth_token` exists alongside
+`anthropic_api_key`, and `permissions: {contents: write, pull-requests: write,
+issues: write}` is the block for branch + push + PR + comment.
+
+**Still unverified: whether the action auto-loads `.claude/skills` or
+`.claude/agents` from the checkout.** The action's docs are silent on it. The
+workflow therefore names every skill and agent file by path in its `prompt` and
+tells the run to read them rather than assume they were loaded — correct whether
+or not auto-load happens.
+
+**Untrusted text never reaches the prompt through YAML.** The workflow
+interpolates only the issue or PR *number*; the run fetches the body itself with
+`gh` and is told it is data. Interpolating `github.event.issue.body` into a
+`prompt:` or `run:` block would be both a shell-injection and a prompt-injection
+surface on a public repo.
 
 ## Skills and agents
 

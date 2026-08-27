@@ -1,4 +1,4 @@
-import { fmtUSD, fmtTok, pct, shortProject } from '../format.js';
+import { fmtTok, fmtUSD, pct, shortProject } from '../format.js';
 
 export default function ProjectsTable({ rows, totalCost }) {
   return (

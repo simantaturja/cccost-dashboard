@@ -23,6 +23,7 @@
     "formatter": { "quoteStyle": "single" }
   },
   "css": {
-    "parser": { "tailwindDirectives": true }
+    "parser": { "tailwindDirectives": true },
+    "formatter": { "quoteStyle": "single" }
   }
 }

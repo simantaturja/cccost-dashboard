@@ -12,6 +12,7 @@ export default function TabNav({ tabs, active }) {
       {tabs.map((t) => (
         <button
           key={t}
+          type="button"
           className={
             '-mb-px cursor-pointer border-b-2 bg-transparent px-[13px] text-[13px] leading-none tracking-[0.01em] transition-colors focus-visible:rounded-[3px] focus-visible:outline-2 focus-visible:outline-accent ' +
             (t === active

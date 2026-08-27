@@ -13,7 +13,7 @@ const dataChangedSubs = new Set();
 if (IN_WEBVIEW) {
   window.addEventListener('message', (e) => {
     const msg = e.data;
-    if (!msg || msg.__cccost !== true) return;
+    if (msg?.__cccost !== true) return;
     if (msg.type === 'dataChanged') {
       dataChangedSubs.forEach((cb) => {
         cb();

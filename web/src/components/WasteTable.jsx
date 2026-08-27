@@ -25,16 +25,15 @@ function Intro() {
     <>
       <p className="mb-2 mt-1 max-w-[60ch] text-[13px] leading-[1.6] text-muted">
         Tool calls that <strong>failed and were retried</strong>, and files{' '}
-        <strong>re-read when the answer was already in context</strong> — quota you
-        paid for but didn&apos;t need. Shown as counts, not dollars: token usage is
-        logged per message, not per tool call.
+        <strong>re-read when the answer was already in context</strong> — quota you paid for but
+        didn&apos;t need. Shown as counts, not dollars: token usage is logged per message, not per
+        tool call.
       </p>
       <p className={METHOD_CLS}>
-        How it&apos;s measured: an errored tool call is a tool result the log marks
-        as an error, counted only when the same tool is called again afterward
-        (a retry); a redundant read is the same file read whole again with no
-        edit or shell command in between (partial reads and re-reads after a
-        change are expected, so they aren&apos;t counted).
+        How it&apos;s measured: an errored tool call is a tool result the log marks as an error,
+        counted only when the same tool is called again afterward (a retry); a redundant read is the
+        same file read whole again with no edit or shell command in between (partial reads and
+        re-reads after a change are expected, so they aren&apos;t counted).
       </p>
     </>
   );
@@ -47,7 +46,9 @@ export default function WasteTable({ rows }) {
     return (
       <>
         <Intro />
-        <div className="empty">No repeated waste detected — tool calls mostly succeeded and context was reused.</div>
+        <div className="empty">
+          No repeated waste detected — tool calls mostly succeeded and context was reused.
+        </div>
       </>
     );
   }
@@ -116,9 +117,9 @@ export default function WasteTable({ rows }) {
         <>
           <h2 className="section-label">What the errors were</h2>
           <p className={METHOD_CLS}>
-            A few concrete examples per failure kind — the command or file that
-            failed and the message it returned. Recognizable credentials (keyed
-            flags, tokens, auth headers) are redacted — review before sharing.
+            A few concrete examples per failure kind — the command or file that failed and the
+            message it returned. Recognizable credentials (keyed flags, tokens, auth headers) are
+            redacted — review before sharing.
           </p>
           <div className="scroll">
             <table>
@@ -131,10 +132,16 @@ export default function WasteTable({ rows }) {
               </thead>
               <tbody>
                 {rows.errorSamples.map((e, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: index is only a tiebreaker inside a composite key (tool+reason), not the sole identity
                   <tr key={`${e.tool}-${e.reason}-${i}`}>
                     <td>{e.tool}</td>
-                    <td><code title={e.target}>{e.target || '—'}</code></td>
-                    <td title={e.text}>{REASON_LABELS[e.reason] || e.reason}{e.text ? `: ${e.text}` : ''}</td>
+                    <td>
+                      <code title={e.target}>{e.target || '—'}</code>
+                    </td>
+                    <td title={e.text}>
+                      {REASON_LABELS[e.reason] || e.reason}
+                      {e.text ? `: ${e.text}` : ''}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -13,7 +13,12 @@ export default function AdvisorTable({ rows }) {
             <th>Session</th>
             <th className="num">Date</th>
             <th className="num">Cost</th>
-            <th className="num" title="Quota/capacity value at API-equivalent pricing — not money saved on a subscription.">Est. capacity</th>
+            <th
+              className="num"
+              title="Quota/capacity value at API-equivalent pricing — not money saved on a subscription."
+            >
+              Est. capacity
+            </th>
             <th>Reasons</th>
           </tr>
         </thead>
@@ -27,6 +32,7 @@ export default function AdvisorTable({ rows }) {
               <td className="num">{a.estSavingUSD ? fmtUSD(a.estSavingUSD) : '—'}</td>
               <td style={{ whiteSpace: 'normal' }}>
                 {a.reasons.map((r, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: reasons is a fixed, append-only array computed fresh per render and never reordered; deferred to a separate a11y/keys pass
                   <div key={i}>
                     <div>
                       <span

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { fmtUSD, fmtTok } from '../format.js';
+import { fmtTok, fmtUSD } from '../format.js';
 
 const W = 1080;
 const H = 220;
@@ -23,8 +23,15 @@ function barPath(x, y, w, h) {
 
 const pad = (n) => String(n).padStart(2, '0');
 const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const parse = (s) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd); };
-const mondayOf = (d) => { const c = new Date(d); c.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return c; };
+const parse = (s) => {
+  const [y, m, dd] = s.split('-').map(Number);
+  return new Date(y, m - 1, dd);
+};
+const mondayOf = (d) => {
+  const c = new Date(d);
+  c.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return c;
+};
 
 const MODES = [
   { id: 'day', label: 'Day', range: 'last 90 days' },
@@ -57,7 +64,9 @@ function buildSeries(daily, mode) {
     for (const d of daily) {
       const k = dateKey(mondayOf(parse(d.date)));
       const e = agg.get(k) || { costUSD: 0, tokens: 0 };
-      e.costUSD += d.costUSD; e.tokens += d.tokens; agg.set(k, e);
+      e.costUSD += d.costUSD;
+      e.tokens += d.tokens;
+      agg.set(k, e);
     }
     const end = mondayOf(newest);
     const out = [];
@@ -66,7 +75,13 @@ function buildSeries(daily, mode) {
       cur.setDate(end.getDate() - i * 7);
       const key = dateKey(cur);
       const e = agg.get(key) || { costUSD: 0, tokens: 0 };
-      out.push({ key, label: key.slice(5), tip: `week of ${key}`, costUSD: e.costUSD, tokens: e.tokens });
+      out.push({
+        key,
+        label: key.slice(5),
+        tip: `week of ${key}`,
+        costUSD: e.costUSD,
+        tokens: e.tokens,
+      });
     }
     return out;
   }
@@ -76,7 +91,9 @@ function buildSeries(daily, mode) {
   for (const d of daily) {
     const k = d.date.slice(0, 7);
     const e = agg.get(k) || { costUSD: 0, tokens: 0 };
-    e.costUSD += d.costUSD; e.tokens += d.tokens; agg.set(k, e);
+    e.costUSD += d.costUSD;
+    e.tokens += d.tokens;
+    agg.set(k, e);
   }
   const out = [];
   for (let i = 11; i >= 0; i--) {
@@ -128,13 +145,22 @@ export default function DailyChart({ daily }) {
   }
 
   return (
-    <div className="chart relative rounded-panel border border-line bg-surface px-[18px] pb-2 pt-4 shadow-panel" ref={wrapRef}>
+    <div
+      className="chart relative rounded-panel border border-line bg-surface px-[18px] pb-2 pt-4 shadow-panel"
+      ref={wrapRef}
+    >
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-xs text-muted">Spend — {range}</span>
-        <div className="inline-flex overflow-hidden rounded-[7px] border border-line" role="group" aria-label="Chart granularity">
+        {/* biome-ignore lint/a11y/useSemanticElements: swapping to <fieldset> is a real markup change (default border/padding to override) deliberately out of scope for this plan */}
+        <div
+          className="inline-flex overflow-hidden rounded-[7px] border border-line"
+          role="group"
+          aria-label="Chart granularity"
+        >
           {MODES.map((m) => (
             <button
               key={m.id}
+              type="button"
               className={
                 'cursor-pointer border-l border-line px-[13px] py-[5px] text-xs transition-colors first:border-l-0 focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent ' +
                 (m.id === mode
@@ -142,7 +168,10 @@ export default function DailyChart({ daily }) {
                   : 'bg-transparent text-muted hover:text-ink')
               }
               aria-pressed={m.id === mode}
-              onClick={() => { setMode(m.id); setHover(null); }}
+              onClick={() => {
+                setMode(m.id);
+                setHover(null);
+              }}
             >
               {m.label}
             </button>
@@ -154,6 +183,7 @@ export default function DailyChart({ daily }) {
       ) : (
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Spend, ${range}`}>
           {gridlines.map(({ v, y }, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: gridlines is a fixed, recomputed-per-render array that is never reordered; deferred to a separate a11y/keys pass
             <g key={i}>
               <line className="grid-line" x1={PAD.l} x2={W - PAD.r} y1={y} y2={y} />
               <text x={PAD.l - 8} y={y + 3} textAnchor="end">
@@ -168,7 +198,7 @@ export default function DailyChart({ daily }) {
             return (
               <g key={d.key}>
                 <path
-                  className={'bar' + (hover && hover.i === i ? ' is-hover' : '')}
+                  className={`bar${hover && hover.i === i ? ' is-hover' : ''}`}
                   d={barPath(x, y, barW, barH)}
                 />
                 {i % labelStep === 0 && (
@@ -176,6 +206,7 @@ export default function DailyChart({ daily }) {
                     {d.label}
                   </text>
                 )}
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: hover-only hit-target for the tooltip; adding a role/keyboard path is a real behaviour change deliberately out of scope for this plan */}
                 <rect
                   x={PAD.l + i * band}
                   y={PAD.t}

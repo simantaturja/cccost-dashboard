@@ -17,17 +17,18 @@ test('sessionKeyFor: main file vs nested subagent file share one key', () => {
 
 test('resolveAssetPath: serves under assets, rejects traversal', () => {
   const ok = resolveAssetPath('/assets/index-abc.js');
-  assert.ok(ok && ok.endsWith(path.join('web', 'dist', 'assets', 'index-abc.js')));
+  assert.ok(ok?.endsWith(path.join('web', 'dist', 'assets', 'index-abc.js')));
 
   assert.strictEqual(resolveAssetPath('/assets/../../server.js'), null);
   assert.strictEqual(resolveAssetPath('/assets/../secret'), null);
   assert.strictEqual(resolveAssetPath('/assets/../../../etc/passwd'), null);
 });
 
-test('server binds to loopback only, not every interface', () => new Promise((resolve) => {
-  assert.strictEqual(HOST, '127.0.0.1');
-  server.listen(0, HOST, () => {
-    assert.strictEqual(server.address().address, '127.0.0.1');
-    server.close(resolve);
-  });
-}));
+test('server binds to loopback only, not every interface', () =>
+  new Promise((resolve) => {
+    assert.strictEqual(HOST, '127.0.0.1');
+    server.listen(0, HOST, () => {
+      assert.strictEqual(server.address().address, '127.0.0.1');
+      server.close(resolve);
+    });
+  }));

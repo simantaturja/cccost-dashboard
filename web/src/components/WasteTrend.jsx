@@ -6,7 +6,10 @@ const DAYS = 30;
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const dateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-const parse = (s) => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd); };
+const parse = (s) => {
+  const [y, m, dd] = s.split('-').map(Number);
+  return new Date(y, m - 1, dd);
+};
 
 // Zero-filled last-30-days series so gaps read as empty bars, not a squeezed timeline.
 function buildSeries(trend) {
@@ -19,7 +22,12 @@ function buildSeries(trend) {
     cur.setDate(newest.getDate() - i);
     const key = dateKey(cur);
     const d = byKey.get(key) || { erroredToolCalls: 0, redundantReads: 0 };
-    out.push({ key, label: key.slice(5), erroredToolCalls: d.erroredToolCalls, redundantReads: d.redundantReads });
+    out.push({
+      key,
+      label: key.slice(5),
+      erroredToolCalls: d.erroredToolCalls,
+      redundantReads: d.redundantReads,
+    });
   }
   return out;
 }
@@ -56,8 +64,12 @@ export default function WasteTrend({ trend }) {
           const redY = errY - redH;
           return (
             <g key={d.key}>
-              {d.erroredToolCalls > 0 && <rect className="bar-error" x={x} y={errY} width={barW} height={errH} />}
-              {d.redundantReads > 0 && <rect className="bar-redundant" x={x} y={redY} width={barW} height={redH} />}
+              {d.erroredToolCalls > 0 && (
+                <rect className="bar-error" x={x} y={errY} width={barW} height={errH} />
+              )}
+              {d.redundantReads > 0 && (
+                <rect className="bar-redundant" x={x} y={redY} width={barW} height={redH} />
+              )}
               {(d.erroredToolCalls > 0 || d.redundantReads > 0) && (
                 <title>{`${d.key}: ${d.erroredToolCalls} errored, ${d.redundantReads} redundant`}</title>
               )}

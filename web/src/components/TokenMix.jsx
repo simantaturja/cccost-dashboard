@@ -37,7 +37,9 @@ export default function TokenMix({ tokenMix, totalTokens }) {
         {segs.map((s) => (
           <li key={s.key} className="flex items-center gap-2 text-[12.5px]">
             <span className={`h-2.5 w-2.5 flex-none rounded-[3px] ${s.bg}`} />
-            <span className="overflow-hidden text-ellipsis whitespace-nowrap text-ink">{s.label}</span>
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap text-ink">
+              {s.label}
+            </span>
             <span className="ml-auto whitespace-nowrap font-mono text-xs font-medium text-muted tabular-nums">
               {fmtTok(s.tokens)}
               <span className="ml-2 font-normal text-faint">{pct(s.tokens, totalTokens)}</span>

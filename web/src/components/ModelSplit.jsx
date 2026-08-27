@@ -52,10 +52,14 @@ export default function ModelSplit({ rows, totalCost }) {
         {segs.map((s) => (
           <li key={s.key} className="flex items-center gap-2 text-[12.5px]">
             <span className={`h-2.5 w-2.5 flex-none rounded-[3px] ${SLOT_BG[s.slot]}`} />
-            <span className="overflow-hidden text-ellipsis whitespace-nowrap text-ink">{s.label}</span>
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap text-ink">
+              {s.label}
+            </span>
             <span className="ml-auto whitespace-nowrap font-mono text-xs font-medium text-muted tabular-nums">
               {fmtUSD(s.costUSD)}
-              <span className="ml-2 font-normal text-faint">{((s.costUSD / total) * 100).toFixed(1)}%</span>
+              <span className="ml-2 font-normal text-faint">
+                {((s.costUSD / total) * 100).toFixed(1)}%
+              </span>
             </span>
           </li>
         ))}

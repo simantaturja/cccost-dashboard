@@ -3,7 +3,12 @@ const vscode = require('vscode');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { buildResponse, buildReport, parseTurns, attributeSubagentTurns } = require('../../lib/core');
+const {
+  buildResponse,
+  buildReport,
+  parseTurns,
+  attributeSubagentTurns,
+} = require('../../lib/core');
 const { createStore, loadConfig } = require('../../lib/scan');
 
 let panel = null;
@@ -23,9 +28,7 @@ function activate(context) {
   updateStatus();
   context.subscriptions.push(statusItem);
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand('cccost.open', () => open(context)),
-  );
+  context.subscriptions.push(vscode.commands.registerCommand('cccost.open', () => open(context)));
 
   // One watcher for Claude Code's logs drives both the status bar and any open panel.
   const pattern = new vscode.RelativePattern(store.projectsDir, '**/*.jsonl');
@@ -86,7 +89,7 @@ function open(context) {
   panel.webview.html = renderHtml(panel.webview, mediaRoot);
 
   panel.webview.onDidReceiveMessage(async (msg) => {
-    if (!msg || msg.__cccost !== true) return;
+    if (msg?.__cccost !== true) return;
     try {
       const payload = await handle(msg);
       post({ __cccost: true, id: msg.id, payload });
@@ -110,7 +113,7 @@ async function handle(msg) {
     return buildResponse(store.sessions(), config);
   }
   if (msg.type === 'session') {
-    const key = (msg.params && msg.params.key) || '';
+    const key = msg.params?.key || '';
     const files = store.sessionFilesFor(key);
     if (!files) throw new Error('unknown session key');
     const mainText = files.mainPath ? fs.readFileSync(files.mainPath, 'utf8') : '';
@@ -122,7 +125,7 @@ async function handle(msg) {
   }
   if (msg.type === 'report') {
     const payload = buildResponse(store.sessions(), config);
-    const month = (msg.params && msg.params.month) || new Date().toISOString().slice(0, 7);
+    const month = msg.params?.month || new Date().toISOString().slice(0, 7);
     const md = buildReport(payload.monthly, month, new Date().toISOString().slice(0, 10));
     const uri = await vscode.window.showSaveDialog({
       saveLabel: 'Save report',

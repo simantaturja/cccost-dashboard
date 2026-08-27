@@ -27,8 +27,11 @@ export default function ReportControl({ monthly }) {
         ))}
       </select>
       {href ? (
-        <a className={linkCls} href={href}>Download</a>
+        <a className={linkCls} href={href}>
+          Download
+        </a>
       ) : (
+        // biome-ignore lint/a11y/useValidAnchor: swapping to <button> is a real markup change deliberately out of scope for this plan
         <a
           className={linkCls}
           href="#"

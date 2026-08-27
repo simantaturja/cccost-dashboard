@@ -1,4 +1,4 @@
-import { fmtUSD, fmtTok, pct } from '../format.js';
+import { fmtTok, fmtUSD, pct } from '../format.js';
 
 export default function ModelsTable({ rows, totalCost }) {
   return (

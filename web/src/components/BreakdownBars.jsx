@@ -1,4 +1,4 @@
-import { fmtUSD, fmtTok, pct, shortProject } from '../format.js';
+import { fmtTok, fmtUSD, pct, shortProject } from '../format.js';
 
 // Horizontal magnitude bars for the top spenders, biggest first, with the long
 // tail rolled into one "Other" row so the chart never grows unbounded. Single
@@ -54,7 +54,7 @@ export default function BreakdownBars({ rows, totalCost, topN = 8 }) {
                   'h-full min-w-[3px] rounded-r-[4px] transition-[width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ' +
                   (b.muted ? 'bg-cat-other' : 'bg-chart')
                 }
-                style={{ width: (b.costUSD / max) * 100 + '%' }}
+                style={{ width: `${(b.costUSD / max) * 100}%` }}
               />
             </div>
             <span className="whitespace-nowrap text-right font-mono text-[12.5px] font-medium text-ink tabular-nums">

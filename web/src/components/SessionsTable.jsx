@@ -1,31 +1,37 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-import { fmtUSD, fmtTok, sumTok, shortProject } from '../format.js';
+import { fmtTok, fmtUSD, shortProject, sumTok } from '../format.js';
 
 const TRUNCATE = 200;
 
 function fmtTurnTime(ts) {
   if (!ts) return '—';
-  return ts.slice(0, 10) + ' ' + ts.slice(11, 16);
+  return `${ts.slice(0, 10)} ${ts.slice(11, 16)}`;
 }
 
 function Turn({ t, maxCost }) {
   const [full, setFull] = useState(false);
   const long = t.prompt.length > TRUNCATE;
-  const text = full || !long ? t.prompt : t.prompt.slice(0, TRUNCATE) + '…';
+  const text = full || !long ? t.prompt : `${t.prompt.slice(0, TRUNCATE)}…`;
   const mainCost = Math.max(t.costUSD - t.subagentCostUSD, 0);
   const mainPct = Math.min(100, (mainCost / maxCost) * 100);
   const subPct = Math.max(0, Math.min(100 - mainPct, (t.subagentCostUSD / maxCost) * 100));
   return (
-    <li className={'border-t border-line pb-[11px] pt-2.5 first:border-t-0' + (t.flagged ? ' opacity-80' : '')}>
+    <li
+      className={`border-t border-line pb-[11px] pt-2.5 first:border-t-0${t.flagged ? ' opacity-80' : ''}`}
+    >
       <div className="mb-1 flex items-baseline gap-2.5">
-        <span className="font-mono text-[11.5px] tracking-[0.02em] text-faint">{fmtTurnTime(t.timestamp)}</span>
+        <span className="font-mono text-[11.5px] tracking-[0.02em] text-faint">
+          {fmtTurnTime(t.timestamp)}
+        </span>
         {t.flagged && (
           <span className="rounded-[4px] bg-soft px-1.5 py-[3px] font-mono text-[9.5px] font-semibold uppercase leading-none tracking-[0.06em] text-accent">
             continuation
           </span>
         )}
-        <span className="ml-auto font-mono text-[12.5px] font-medium text-ink">{fmtUSD(t.costUSD)}</span>
+        <span className="ml-auto font-mono text-[12.5px] font-medium text-ink">
+          {fmtUSD(t.costUSD)}
+        </span>
       </div>
       <div
         className="mb-2 flex h-1 w-full overflow-hidden rounded-[2px] bg-surface-2"
@@ -36,9 +42,13 @@ function Turn({ t, maxCost }) {
             : fmtUSD(t.costUSD)
         }
       >
-        <div className="h-full min-w-[2px] bg-chart" style={{ width: mainPct + '%' }} />
-        {t.subagentCostUSD > 0 && <div className="h-full bg-accent" style={{ width: subPct + '%' }} />}
+        <div className="h-full min-w-[2px] bg-chart" style={{ width: `${mainPct}%` }} />
+        {t.subagentCostUSD > 0 && (
+          <div className="h-full bg-accent" style={{ width: `${subPct}%` }} />
+        )}
       </div>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: click-to-expand truncated prompt text; adding a role/keyboard path is a real behaviour change deliberately out of scope for this plan */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: same click-to-expand div; keyboard support is a real behaviour change deliberately out of scope for this plan */}
       <div
         className={
           'whitespace-pre-wrap break-words text-[12.5px] text-ink' +
@@ -80,7 +90,7 @@ function PromptTimeline({ sessionKey }) {
 
   const maxCost = useMemo(
     () => Math.max(...(state.turns || []).map((t) => t.costUSD), 0.01),
-    [state.turns]
+    [state.turns],
   );
 
   const noteCls = 'py-3 text-[12.5px] text-muted';
@@ -92,6 +102,7 @@ function PromptTimeline({ sessionKey }) {
   return (
     <ol className="m-0 list-none p-0">
       {state.turns.map((t, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: turns are append-only and never reordered; deferred to a separate a11y/keys pass
         <Turn key={i} t={t} maxCost={maxCost} />
       ))}
     </ol>
@@ -136,7 +147,7 @@ function SessionDetail({ s }) {
                 >
                   <div
                     className="h-full min-w-[2px] rounded-[3px] bg-chart"
-                    style={{ width: (m.costUSD / maxModelCost) * 100 + '%' }}
+                    style={{ width: `${(m.costUSD / maxModelCost) * 100}%` }}
                   />
                 </div>
               </td>
@@ -168,9 +179,7 @@ export default function SessionsTable({ sessions }) {
 
   const rows = useMemo(() => {
     const filtered =
-      project === 'all'
-        ? sessions
-        : sessions.filter((s) => shortProject(s.project) === project);
+      project === 'all' ? sessions : sessions.filter((s) => shortProject(s.project) === project);
     return [...filtered].sort((a, b) => {
       const [va, vb] =
         sort.key === 'date'
@@ -231,7 +240,7 @@ export default function SessionsTable({ sessions }) {
               return (
                 <Fragment key={id}>
                   <tr
-                    className={'row' + (isOpen ? ' is-open' : '')}
+                    className={`row${isOpen ? ' is-open' : ''}`}
                     onClick={() => setOpen(isOpen ? null : id)}
                   >
                     <td title={s.project}>{shortProject(s.project)}</td>
@@ -247,7 +256,7 @@ export default function SessionsTable({ sessions }) {
                         >
                           <div
                             className="h-full min-w-[2px] rounded-[3px] bg-chart"
-                            style={{ width: (s.costUSD / maxRowCost) * 100 + '%' }}
+                            style={{ width: `${(s.costUSD / maxRowCost) * 100}%` }}
                           />
                         </div>
                         {fmtUSD(s.costUSD)}

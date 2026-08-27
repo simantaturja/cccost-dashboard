@@ -41,6 +41,7 @@
     "test:ui": "playwright test",
     "lint": "biome check .",
     "format": "biome check --write .",
+    "verify": "npm run lint && npm test && npm run test:ui",
     "prepublishOnly": "npm --prefix web ci && npm run build"
   },
   "devDependencies": {

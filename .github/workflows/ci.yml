@@ -20,5 +20,9 @@ jobs:
         run: npm --prefix web ci
       - name: Build frontend
         run: npm run build
-      - name: Run tests
-        run: npm test
+      - name: Install root dev dependencies
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Verify
+        run: npm run verify

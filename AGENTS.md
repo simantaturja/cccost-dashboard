@@ -24,7 +24,7 @@ transcripts and reports cost per project, model, session, and prompt.
   `test/`, not only `*.test.js`.
 - `npm run lint` / `npm run format` — Biome.
 - `npm run test:ui` — Playwright.
-- `npm run verify` — lint + test + test:ui. This is the gate.
+- `npm run verify` — build + lint + test + test:ui. This is the gate.
 
 ## Rules
 

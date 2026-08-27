@@ -8,3 +8,4 @@ config.json
 .claude/settings.local.json
 test-results
 playwright-report
+.loop/runner/state

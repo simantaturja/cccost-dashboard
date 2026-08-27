@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cccost.loop-lanes</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>REPO_PATH/.loop/runner/lanes.sh</string>
+  </array>
+
+  <!-- Hourly. GitHub pushes a label event; polling is what replaces it, and the
+       runner is idempotent — an issue already processed is skipped by state file
+       and again by the skill's own dedup against .loop/log.md. -->
+  <key>StartInterval</key>
+  <integer>3600</integer>
+
+  <key>WorkingDirectory</key>
+  <string>REPO_PATH</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>LOOP_REPO</key>
+    <string>REPO_PATH</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>REPO_PATH/.loop/runner/logs/launchd-lanes.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>REPO_PATH/.loop/runner/logs/launchd-lanes.err.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

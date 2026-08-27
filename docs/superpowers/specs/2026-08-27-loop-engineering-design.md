@@ -209,43 +209,45 @@ mechanical. Authoring one is not — which is why gate 2 sits between them.
 
 ## Runners
 
-Hybrid, because the two lanes need different things:
+**Both lanes run locally, on launchd.** Not the hybrid this spec originally
+specified — see the decision below.
 
-| Lane | Runner | Why |
+| Lane | Runner | Cadence |
 |---|---|---|
-| Watchdog | local Claude Code cron, daily | checks 1 and 3 need real `~/.claude` transcripts; CI never sees them |
-| Issue autopilot | GitHub Actions, event-driven | needs no local data; must work while the Mac sleeps; GitHub already pushes the event, so nothing polls |
+| Watchdog | `com.cccost.loop-watchdog` | daily, 09:47 local |
+| Issue autopilot + gate 2 | `com.cccost.loop-lanes` | hourly poll |
 
-Both authenticate with `CLAUDE_CODE_OAUTH_TOKEN`, not `ANTHROPIC_API_KEY` — the
-action supports subscription auth, so the cloud runner costs no API credits.
+Scripts, plists and installer live in `.loop/runner/`. Both authenticate with
+the Claude Code login already on the machine, so **no credential exists in this
+repo's secrets at all**.
 
-**Action API, verified 2026-08-27 against `action.yml` on `main`** (pin `@v1`,
-then resolving to v1.0.207). Three of this spec's earlier assumptions were wrong:
+### Why not GitHub Actions
 
-- There is **no `allowed_tools` input and no `model` input.** Tool and model
-  control go through `claude_args`, a passthrough for Claude Code CLI flags
-  (`--allowedTools`, `--disallowedTools`, `--model`, `--max-turns`,
-  `--append-system-prompt`). `claude_args` takes precedence over `settings`.
-- There is **no `mode` input** — it was removed, and execution mode is
-  auto-detected from workflow context. For a label-triggered run, `prompt` plus
-  an auth input is sufficient; `track_progress` is optional and unrelated.
-- `settings` accepts **inline JSON or a path**, not a path only.
+This spec originally put the issue lane on `anthropics/claude-code-action`,
+event-driven on a label. That was rejected on review, for a reason the original
+reasoning missed:
 
-Confirmed as this spec assumed: `claude_code_oauth_token` exists alongside
-`anthropic_api_key`, and `permissions: {contents: write, pull-requests: write,
-issues: write}` is the block for branch + push + PR + comment.
+The action needs an Anthropic credential — `claude_code_oauth_token` or
+`anthropic_api_key` — stored in the secrets of a **public** repo. The OAuth form
+authenticates as the maintainer's whole Claude account. Worse, gate 2 fires on a
+label applied to a *pull request*, and `issues: [labeled]` does not fire for PRs,
+so the trigger has to be `pull_request_target` — the one trigger that
+deliberately does receive secrets. A single `if:` condition would have been all
+that stood between a subscription credential and a public repo's event surface.
 
-**Still unverified: whether the action auto-loads `.claude/skills` or
-`.claude/agents` from the checkout.** The action's docs are silent on it. The
-workflow therefore names every skill and agent file by path in its `prompt` and
-tells the run to read them rather than assume they were loaded — correct whether
-or not auto-load happens.
+What that bought was "works while the Mac is asleep". Drift detection and issue
+triage both have no deadline, and this is a single-maintainer repo. The trade was
+not worth a long-lived credential.
 
-**Untrusted text never reaches the prompt through YAML.** The workflow
-interpolates only the issue or PR *number*; the run fetches the body itself with
-`gh` and is told it is data. Interpolating `github.event.issue.body` into a
-`prompt:` or `run:` block would be both a shell-injection and a prompt-injection
-surface on a public repo.
+**Cost of the local choice, stated plainly:** nothing fires while the machine
+sleeps, and polling replaces a pushed event. The runner is idempotent — a
+processed issue is skipped by a machine-local state file and again by the skill's
+own dedup against `.loop/log.md` — so a missed hour is a delay, never a
+duplicate.
+
+Gate 2's state key is the PR's **head SHA**, not its number: a design PR revised
+after approval is a different plan, and must not inherit the earlier run's
+"already done".
 
 ## Skills and agents
 
@@ -443,7 +445,9 @@ exactly one issue and appends one log entry; second run files zero.
 Requires Phases 0-2.
 
 Writes `.claude/skills/loop-issue/SKILL.md` and
-`.github/workflows/loop-issue.yml`, using `anthropics/claude-code-action`:
+`.loop/runner/lanes.sh` plus its launchd plist. (Earlier drafts of this spec
+wrote `.github/workflows/loop-issue.yml` using `anthropics/claude-code-action`;
+that was dropped — see Runners.) The label gate is unchanged, only the runner:
 
 ```yaml
 on:
@@ -572,7 +576,8 @@ pick of what to work on.
 - **Baseline churn.** Committed screenshots go stale on intentional UI changes.
   Updating a baseline is a human commit, never a loop commit.
 - **Silent sleep.** Local cron misses days when the machine is off. Acceptable
-  for a drift watchdog, which is why the issue lane runs on Actions instead.
+  for a drift watchdog. The issue lane accepts the same limit rather than put a
+  credential in a public repo's secrets — see Runners.
 - **Prompt injection via issue text.** Mitigated by the `loop:go` label gate —
   untrusted text never starts a run — and by the draft-PR gate. The residual
   risk is a maintainer labelling a hostile issue without reading it.
@@ -591,7 +596,7 @@ pick of what to work on.
 - **Plan wrong as written.** Phase 6 stops at the first task it cannot complete
   as written rather than improvising, so a wrong plan fails loudly instead of
   producing a plausible PR that satisfies no one's intent.
-- **Two runners to keep coherent.** Local cron and Actions must agree on the
+- **Two runners to keep coherent.** Both launchd agents must agree on the
   same `.loop/log.md` and label conventions, and drift between them is a real
   maintenance cost accepted in exchange for the issue lane surviving a sleeping
   laptop.
@@ -600,16 +605,27 @@ pick of what to work on.
 
 No auto-merge. No auto-release. No loop-applied `loop:go` or `loop:build` — the
 loop may never open its own gates. No source changes in a design PR, and no
-design changes in an implementation PR. No polling of the GitHub API — the issue
-lane is event-driven. No MCP server — `gh` covers the tracker. No coverage
+design changes in an implementation PR. No MCP server — `gh` covers the tracker. No coverage
 threshold gate; risk-ranked tests instead.
 
 ## Open items
 
-Both are confirmed at implementation, not assumed here:
+Both original items are closed:
 
-1. The exact local scheduling mechanism for Phase 3 — Claude Code
-   cron/automation invocation and its working-directory semantics.
-2. Whether `anthropics/claude-code-action` auto-loads `.claude/skills` and
-   `.claude/agents` from the checkout (Phase 4). The design does not depend on
-   it either way; confirming it only lets the `prompt` get shorter.
+1. ~~The exact local scheduling mechanism for Phase 3.~~ **launchd**, not Claude
+   Code's own cron — that scheduler is session-scoped and expires after seven
+   days, so it cannot be a durable runner. launchd also fires a missed calendar
+   interval on wake, so a sleeping Mac delays a run rather than skipping it.
+2. ~~Whether `anthropics/claude-code-action` auto-loads `.claude/skills` and
+   `.claude/agents`.~~ **Moot** — the action is no longer used (see Runners). It
+   remains genuinely undocumented, should the question return.
+
+Still open:
+
+3. **The push hole.** Pushing to `master` is prevented by prose, not by tool
+   grants. Close it with a `PreToolUse` matcher narrow enough to spare
+   `/release` — which pushes master at step 7 and again at step 9 — or accept it
+   explicitly and record why.
+4. **`publish.yml` auto-publishes to npm** on any push to `master` touching
+   `package.json`, with no environment protection. Pre-existing and outside this
+   spec, but it means a merged loop PR carrying a version bump publishes itself.

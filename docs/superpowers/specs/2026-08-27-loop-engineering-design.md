@@ -29,17 +29,27 @@ Lanes 3-4 are sketched; each gets its own spec when its turn comes.
 
 ## Human gate
 
-**The loop stops at a draft PR.** It may create issues, comment on issues, apply
-`loop:*` labels, open worktrees, commit on a `loop/<slug>` branch, push that
-branch, and open a draft PR against master. It may not merge, commit or push to
+Three gates, in order. Each is a human act; the loop cannot pass one on its own.
+
+| # | Gate | Human act | What it authorises |
+|---|---|---|---|
+| 1 | **Work this issue** | apply `loop:go` | the loop may triage, and may build a bug or docs fix |
+| 2 | **Design approved** | apply `loop:build` on the design PR | the loop may implement the plan it authored |
+| 3 | **Code approved** | review and merge the implementation draft PR | the change ships |
+
+The loop may create issues, comment on issues, apply `loop:*` labels, open
+worktrees, commit on a `loop/<slug>` branch, push that branch, author the spec
+and plan, and open draft PRs against master. It may not merge, commit or push to
 master, publish to npm, or release the extension. Every line that ships is read
 by a human first.
 
-**The loop never brainstorms and never authors a spec.** Brainstorming resolves
-ambiguity by asking the person who holds the intent; an unattended run has
-nobody to ask, so a self-brainstorming loop is a model inventing requirements
-and then agreeing with itself. Ambiguity resolution stays human. See "How a
-feature gets built" below.
+**What gate 2 is for.** The loop authors the spec and the plan, which means both
+encode decisions no human made. Gate 2 is where those decisions get caught. That
+only works if the artifacts make their own choices visible, so every loop-authored
+spec must open with an **Assumptions and interpretations** section: the readings
+the issue admitted, which one it took, what it rejected and why, and every
+question it had to answer without you. A spec that reads as settled prose has
+hidden exactly what gate 2 exists to inspect. See "How a feature gets built".
 
 ## Current state (verified 2026-08-27)
 
@@ -123,9 +133,9 @@ Three labels are human-applied and act as gates:
 
 | Label | Applied by | Effect |
 |---|---|---|
-| `loop:go` | human | Triage this issue and, if it is a bug or docs, build it (Phase 4) |
-| `loop:build` | human | A plan is committed for this issue — execute it (Phase 5) |
-| `loop:needs-brainstorm` | loop | Marker only, fires nothing. Says "waiting on a human to brainstorm" |
+| `loop:go` | **human — gate 1** | Triage this issue; build it if bug or docs, else design it (Phase 4) |
+| `loop:needs-review` | loop | Marker only, fires nothing. A design PR is open and waiting on gate 2 |
+| `loop:build` | **human — gate 2** | Design approved — execute the plan (Phase 6) |
 
 ## How a feature gets built
 
@@ -134,53 +144,68 @@ which of two paths it is on. The split is by ambiguity, not by size.
 
 | Issue class | Loop's move | Why |
 |---|---|---|
-| **bug**, **docs** | Build it. Repro, failing test, fix, draft PR. | Ambiguity is low and the failing test *is* the spec — a machine-checkable statement of correct behaviour that the loop did not invent. |
-| **feature** | **Does not build.** Posts a brainstorm brief, labels `loop:needs-brainstorm`, stops. | Ambiguity is the entire problem. |
+| **bug**, **docs** | Build it. Repro, failing test, fix, draft PR. | Ambiguity is low and the failing test *is* the spec — a machine-checkable statement of correct behaviour. Gate 2 is skipped; gates 1 and 3 still apply. |
+| **feature** | Author a spec and a plan, open a **design PR**, stop at gate 2. | Ambiguity is the whole problem, so the design is reviewed as prose and file:line steps before any code exists. |
 | **not-actionable** | Comments its reasoning, stops. | Nothing to build. |
 
-### The brief
+### The design PR
 
-For a feature the loop does the part of brainstorming that is **research, not
-judgment**, and posts it as an issue comment:
+For a feature the loop writes two artifacts and opens a **docs-only draft PR**
+containing just them:
 
-- the request restated, and the distinct interpretations it admits
-- prior art — where this would live, what in the repo already does something similar
-- affected files and blast radius
-- two or three approaches with trade-offs
-- **the open questions only the maintainer can answer** — the ones
-  `/brainstorm` would have asked
-- a category check via `cccost-product-owner`, which is model-invocable
+- `docs/superpowers/specs/YYYY-MM-DD-<slug>-design.md`
+- `docs/superpowers/plans/YYYY-MM-DD-<slug>.md`
 
-The brief is question-shaped on purpose. It must not read as a decision.
+Reviewed as a diff, with inline comments, in the place review already happens.
+CI on it is trivially green — no source changed. Your comments are the revision
+request; the loop revises and pushes to the same PR. Approving means applying
+`loop:build`, which is gate 2.
 
-### Then the human, then the loop again
+The spec must follow the shape the repo's existing specs already use, plus the
+mandatory **Assumptions and interpretations** section described under Human
+gate. The plan must follow the shape of the repo's existing plans: the
+`REQUIRED SUB-SKILL` header, checkbox steps, file:line targets, per-task
+interfaces, and global constraints.
+
+**The verifier reads the design PR before you do.** `loop-verifier` attacks the
+spec and plan for unstated assumptions, scope creep beyond the issue, and steps
+that contradict `AGENTS.md`, and posts its verdict on the PR. It cannot edit
+them. You review the design *and* its adversarial read, not the design alone.
+
+### The whole path
 
 ```
-issue --> loop classifies
+issue --> gate 1: human applies loop:go
+             |
+             v
+      loop classifies
              |
    bug/docs  |  feature
       |      |
-      |      +--> brief comment + loop:needs-brainstorm --> STOP
-      |                            |
-      |                    human runs /brainstorm  (interactive)
-      |                            |
-      |                    spec  docs/superpowers/specs/
-      |                            |
-      |                    human runs writing-plans
-      |                            |
-      |                    plan  docs/superpowers/plans/
-      |                            |
-      |                    human applies loop:build
-      |                            |
-      +----------------------------+--> loop-pipeline --> draft PR --> HUMAN
+      |      +--> loop authors spec + plan
+      |               |
+      |           design PR (docs only) + loop:needs-review
+      |               |
+      |           loop-verifier attacks it, posts verdict
+      |               |
+      |           GATE 2: human reviews diff, applies loop:build
+      |               |
+      |           loop executes the plan task-by-task
+      |               |
+      +---------------+--> loop-pipeline --> implementation draft PR
+                                                    |
+                                          GATE 3: human reviews, merges
 ```
 
-**The plan is the loop's entry point for a feature. The issue never is.** This
-repo's plans are already written for unattended execution — every one opens with
+Two PRs per feature, deliberately: the design PR is a durable record of what was
+approved, and it stays pointable-at after the implementation lands.
+
+**The plan is what the loop implements from — never the issue directly.** This
+repo's plans are already written for unattended execution: every one opens with
 *"For agentic workers: REQUIRED SUB-SKILL: use superpowers:subagent-driven-development
 or superpowers:executing-plans to implement this plan task-by-task"* and carries
 file:line targets, exact code, and per-task interfaces. Executing one is
-mechanical; authoring one is not.
+mechanical. Authoring one is not — which is why gate 2 sits between them.
 
 ## Runners
 
@@ -211,10 +236,11 @@ Everything the loop needs, and which phase writes it.
 |---|---|---|---|
 | `loop-pipeline` | **new** | 2 | The shared mechanics every lane repeats: dedup against `.loop/log.md` and open issues, open the worktree, hand off to the drafter, run `npm run verify`, hand off to the verifier, open the draft PR, append to `.loop/log.md`. Lane skills call this instead of each restating the pipeline. |
 | `loop-watchdog` | **new** | 3 | Lane 1's three drift checks. Decides *what* is a finding; `loop-pipeline` does what happens next. |
-| `loop-issue` | **new** | 4 | Lane 2's single-issue path: classify, then either build (bug/docs) or post the brief and stop (feature). |
-| `loop-plan` | **new** | 5 | Executes a committed plan task-by-task once a human applies `loop:build`. Delegates to `superpowers:subagent-driven-development`, which the plans already name. |
+| `loop-issue` | **new** | 4 | Lane 2's single-issue path: classify, then build (bug/docs) or hand to `loop-design` (feature). |
+| `loop-design` | **new** | 5 | Authors the spec and plan for a feature and opens the design PR. Stops at gate 2 — it cannot apply `loop:build` to its own PR. |
+| `loop-plan` | **new** | 6 | Executes an approved plan task-by-task once a human applies `loop:build`. Delegates to `superpowers:subagent-driven-development`, which the plans already name. |
 | `issue-to-pr` | exists, **frontmatter edit** | 0 | Committed, plus `disable-model-invocation: true`. User-only. |
-| `cccost-product-owner` | exists, unchanged | 0 | Committed. Lane 4 will use it later. |
+| `cccost-product-owner` | exists, unchanged | 0 | Committed. `loop-design` reads it for the WHAT/WHY half of a spec. |
 | `release` | exists, **frontmatter edit** | 0 | Committed, plus `disable-model-invocation: true`. User-only. |
 
 ### User-only skills
@@ -237,7 +263,7 @@ which the field does not block — a plain file read, not an invocation. The lan
 skill must say this explicitly so nobody later "fixes" the reuse by re-enabling
 model invocation.
 
-The three `loop-*` skills stay invocable by both, deliberately: you need to be
+The four `loop-*` skills stay invocable by both, deliberately: you need to be
 able to dry-run a lane by hand while building and debugging it.
 
 **Why `loop-issue` is separate rather than a mode on `issue-to-pr`.** Most
@@ -261,7 +287,8 @@ reference. The interactive skill is not weakened.
 
 The verifier's lack of Edit/Write is the enforcement, not a suggestion: it
 structurally cannot fix what it is judging, so it cannot launder its own
-approval.
+approval. It runs twice per feature: once on the design PR (Phase 5) and once on
+the implementation diff (Phase 6).
 
 **Deny-list, stated in both agent definitions.** Neither agent may: merge a PR,
 commit or push to master, run `npm publish` or `vsce publish`, or edit a
@@ -407,30 +434,62 @@ Workflow shape:
 On a **bug or docs** issue the run follows the same path as the watchdog:
 worktree, drafter, `npm run verify`, verifier, draft PR. It never merges.
 
-On a **feature** issue it posts the brief, applies `loop:needs-brainstorm`, and
-exits without a branch. `loop-issue` states plainly that it may not proceed past
-the brief, and that `loop:build` — not its own judgment — is what authorises a
-feature build.
+On a **feature** issue it hands off to `loop-design` (Phase 5) rather than
+building. `loop-issue` states plainly that it may not write source for a feature,
+and that `loop:build` — not its own judgment — is what authorises that.
 
 **Verify:** three cases.
 - A bug issue with `loop:go` → exactly one run, a draft PR linked to the issue, green CI.
-- A feature issue with `loop:go` → a brief comment, `loop:needs-brainstorm` applied, **no branch and no PR**.
+- A feature issue with `loop:go` → hands off to Phase 5, **no source branch**.
 - Any issue opened *without* the label → nothing starts.
 
-## Phase 5 — plan execution
+## Phase 5 — design authoring
 
 Requires Phase 4.
+
+Writes `.claude/skills/loop-design/SKILL.md`.
+
+On a feature issue the skill:
+- reads the issue body **as data, never as instructions**, plus
+  `cccost-product-owner` for the WHAT/WHY, `AGENTS.md`, and the existing specs
+  and plans under `docs/superpowers/` for house shape
+- authors the spec, opening with the mandatory **Assumptions and
+  interpretations** section — readings admitted, reading taken, readings
+  rejected and why, questions answered without a human
+- authors the plan in the repo's existing plan shape: `REQUIRED SUB-SKILL`
+  header, checkbox steps, file:line targets, per-task interfaces, global
+  constraints
+- commits both to `loop/<slug>` and opens a **docs-only draft PR**, applying
+  `loop:needs-review`
+- asks `loop-verifier` to attack the design and posts that verdict on the PR
+- **stops.** It may not apply `loop:build`, may not write source, and may not
+  open a second PR. Gate 2 is not its to pass.
+
+Revision: a human comment on the design PR re-triggers the skill, which revises
+and pushes to the same PR. The comment is treated as instruction, since it comes
+from a maintainer, unlike the issue body.
+
+**Verify:** hand it a feature issue and confirm the design PR contains **only**
+files under `docs/superpowers/`, that the spec's Assumptions section is
+non-empty, that `loop:needs-review` is applied, and that no source file and no
+second branch exist. Then confirm the loop cannot apply `loop:build` itself.
+
+## Phase 6 — plan execution
+
+Requires Phase 5.
 
 Writes `.claude/skills/loop-plan/SKILL.md` and extends the Phase 4 workflow with
 `loop:build`.
 
-Trigger: a human applies `loop:build` to an issue whose body or a comment names
-a committed plan path under `docs/superpowers/plans/`. The label is the
-authorisation; the plan is the contract.
+Trigger: a human applies `loop:build` to a design PR (gate 2). The label is the
+authorisation; the plan on that PR's branch is the contract.
 
 The skill:
-- refuses to run if no committed plan is named, or the path does not exist on
-  master — it never proceeds on a plan it cannot read
+- refuses to run unless the plan exists on the `loop/<slug>` branch and that
+  branch's PR is the one labelled — it never proceeds on a plan it cannot read,
+  and never on a plan that was not the approved one
+- re-reads the plan from git at the labelled commit, so a plan edited after
+  approval is detected rather than silently used
 - delegates to `superpowers:subagent-driven-development`, the sub-skill the plans
   themselves already require
 - runs `npm run verify` between tasks, not only at the end, so a broken task is
@@ -445,19 +504,19 @@ The skill:
 `docs/superpowers/plans/2026-07-19-sessions-prompt-cost-bars.md` on a scratch
 branch reverted to that commit's parent. It should reproduce that work, tick
 every box, and stay green. Then hand it a plan naming a nonexistent file and
-confirm it refuses rather than improvising.
+confirm it refuses rather than improvising. Then confirm an unlabelled design PR
+executes nothing.
 
 ## Lane 3 — self-audit (later, its own spec)
 
 Untested branches in `lib/core.js`, `web/src` UI regressions against committed
 baselines, dead code. Needs Phase 1's UI gate first. Files findings as
-`loop:audit` issues, which then travel the Phase 4/5 paths like any other issue.
+`loop:audit` issues, which then travel the Phase 4/5/6 paths like any other issue.
 
 Lane 4 as originally sketched — "`cccost-product-owner` picks a roadmap item and
-the drafter builds it" — is **dropped**. Phase 5 covers building a feature, and
-it does so from a plan a human approved rather than from a model's pick. That was
-the highest comprehension-debt idea in the original scope and it turned out to be
-unnecessary.
+the drafter builds it" — is **dropped**. Phases 5 and 6 cover building a feature,
+and they start from an issue plus gate 2 rather than from a model's unprompted
+pick of what to work on.
 
 ## Risks
 
@@ -475,13 +534,21 @@ unnecessary.
 - **Prompt injection via issue text.** Mitigated by the `loop:go` label gate —
   untrusted text never starts a run — and by the draft-PR gate. The residual
   risk is a maintainer labelling a hostile issue without reading it.
-- **The brief reading as a decision.** A well-written brief is persuasive, and a
-  persuasive brief can substitute for the brainstorm it was meant to prepare.
-  Mitigation is structural: the brief is question-shaped, and the loop cannot
-  author a spec, so the ambiguity has to be resolved somewhere a human is.
-- **Plan drift.** A plan can be wrong or stale. Phase 5 stops at the first task
-  it cannot complete as written rather than improvising, so a wrong plan fails
-  loudly instead of producing a plausible PR that satisfies no one's intent.
+- **The loop-authored spec reading as settled.** This is the largest risk in the
+  design and it is a direct consequence of the loop authoring the spec and plan:
+  fluent prose invites a nod rather than a read, and gate 2 then approves
+  decisions nobody examined. Three structural mitigations, none of them
+  sufficient alone: the mandatory Assumptions and interpretations section forces
+  the choices into the open; the docs-only design PR makes them a reviewable
+  diff rather than a wall of text; and `loop-verifier` attacks the design before
+  a human sees it. The residual risk is real — gate 2 is where comprehension
+  debt enters this system, and no structure removes that.
+- **Plan drift after approval.** A plan could be edited between gate 2 and
+  execution. Phase 6 re-reads the plan from git at the labelled commit and
+  refuses if it moved.
+- **Plan wrong as written.** Phase 6 stops at the first task it cannot complete
+  as written rather than improvising, so a wrong plan fails loudly instead of
+  producing a plausible PR that satisfies no one's intent.
 - **Two runners to keep coherent.** Local cron and Actions must agree on the
   same `.loop/log.md` and label conventions, and drift between them is a real
   maintenance cost accepted in exchange for the issue lane surviving a sleeping
@@ -489,9 +556,10 @@ unnecessary.
 
 ## Non-goals
 
-No auto-merge. No auto-release. **No loop-authored brainstorming, and no
-loop-authored spec.** No loop-authored plan. No polling of the GitHub API — the
-issue lane is event-driven. No MCP server — `gh` covers the tracker. No coverage
+No auto-merge. No auto-release. No loop-applied `loop:go` or `loop:build` — the
+loop may never open its own gates. No source changes in a design PR, and no
+design changes in an implementation PR. No polling of the GitHub API — the issue
+lane is event-driven. No MCP server — `gh` covers the tracker. No coverage
 threshold gate; risk-ranked tests instead.
 
 ## Open items

@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { getRates } = require('../lib/core');
+const { getRates, PRICING } = require('../lib/core');
 
 const known = JSON.parse(
   fs.readFileSync(path.join(__dirname, 'fixtures', 'known-models.json'), 'utf8'),
@@ -16,6 +16,7 @@ const EXPECTED_INPUT = {
   'claude-opus-5': 5,
   'claude-opus-4-8': 5,
   'claude-fable-5': 10,
+  'claude-mythos-5': 10,
   'claude-sonnet-5': 2,
   'claude-haiku-4-5-20251001': 1,
   opus: 5,
@@ -53,6 +54,28 @@ test('cache rates hold their multiples of the input rate', () => {
     assert.strictEqual(r.write5m, r.input * 1.25, `${id} 5m cache-write multiple`);
     assert.strictEqual(r.write1h, r.input * 2, `${id} 1h cache-write multiple`);
     assert.ok(Math.abs(r.read - r.input * 0.1) < 1e-9, `${id} cache-read multiple`);
+  }
+});
+
+// Opus fast mode is billed at premium rates across the whole context window —
+// exactly double the standard opus tier. Only Opus offers `fast`.
+test('opus fast tier is double the standard tier', () => {
+  const fast = getRates('claude-opus-5', 'fast');
+  assert.deepStrictEqual(fast, { input: 10, output: 50, write5m: 12.5, write1h: 20, read: 1 });
+  const standard = getRates('claude-opus-5');
+  for (const key of ['input', 'output', 'write5m', 'write1h', 'read']) {
+    assert.strictEqual(fast[key], standard[key] * 2, `fast ${key} is not 2x standard`);
+  }
+});
+
+// The allowlist test above only checks known IDs resolve into PRICING. This
+// checks the other direction: every PRICING row must be reachable from at
+// least one fixture ID, so a new row added without a fixture update fails
+// here instead of shipping unverified (see AGENTS.md's pricing-change rule).
+test('every PRICING entry is reachable from a known model ID', () => {
+  for (const { match } of PRICING) {
+    const reachable = known.priced.some((id) => id.includes(match));
+    assert.ok(reachable, `PRICING entry '${match}' has no known-models.json fixture id`);
   }
 });
 

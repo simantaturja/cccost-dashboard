@@ -132,6 +132,49 @@ the action runs Claude Code against a checkout. The workflow therefore names the
 skill and agent files by path in its `prompt` input, so the run reads them as
 files regardless of whether they auto-load.
 
+## Skills and agents
+
+Everything the loop needs, and which phase writes it.
+
+### Skills
+
+| Skill | State | Phase | Purpose |
+|---|---|---|---|
+| `loop-pipeline` | **new** | 2 | The shared mechanics every lane repeats: dedup against `.loop/log.md` and open issues, open the worktree, hand off to the drafter, run `npm run verify`, hand off to the verifier, open the draft PR, append to `.loop/log.md`. Lane skills call this instead of each restating the pipeline. |
+| `loop-watchdog` | **new** | 3 | Lane 1's three drift checks. Decides *what* is a finding; `loop-pipeline` does what happens next. |
+| `loop-issue` | **new** | 4 | Lane 2's unattended single-issue path. |
+| `issue-to-pr` | exists, **one edit** | 0 | Committed as-is, plus one pointer line to `loop-issue` for the unattended path. |
+| `cccost-product-owner` | exists, unchanged | 0 | Committed. Lane 4 will use it later. |
+| `release` | exists, unchanged | 0 | Committed for human use. **The loop is never permitted to invoke it** — see the agent deny-list below. |
+
+**Why `loop-issue` is separate rather than a mode on `issue-to-pr`.** The
+existing skill states a hard rule: *"the verdict table is a stop. Never move
+from triage into implementation without the user naming the issue to build."*
+Its Stage 1 also sweeps every open issue, whereas Phase 4 acts on exactly one.
+Adding an unattended mode would mean weakening that stop rule in the file that
+also runs interactively — the kind of edit that quietly removes a guardrail from
+both paths. Instead `loop-issue` states plainly that **applying the `loop:go`
+label is the maintainer's naming act**, which is what satisfies the stop rule,
+and delegates classification and evaluation to `issue-to-pr`'s stages by
+reference. The interactive skill is not weakened.
+
+### Agents
+
+| Agent | Phase | Tools | Model / effort |
+|---|---|---|---|
+| `loop-drafter` | 2 | Read, Edit, Write, Bash, Grep, Glob | inherits session model; default effort |
+| `loop-verifier` | 2 | **Read, Grep, Bash only** | inherits session model; high effort |
+
+The verifier's lack of Edit/Write is the enforcement, not a suggestion: it
+structurally cannot fix what it is judging, so it cannot launder its own
+approval.
+
+**Deny-list, stated in both agent definitions.** Neither agent may: merge a PR,
+commit or push to master, invoke the `release` skill, run `npm publish` or
+`vsce publish`, or edit a committed screenshot baseline. The `release` skill
+lives in the same committed `.claude/skills/` the agents can read, so this
+exclusion is written into the agent files rather than left to inference.
+
 ## Phase 0 — make agent knowledge versioned
 
 ~0.5 agentic hours.
@@ -139,6 +182,8 @@ files regardless of whether they auto-load.
 - `.gitignore`: replace blanket `.claude/` with `.claude/settings.local.json`.
   Commit the three existing skills. Un-ignore `docs/superpowers/` — the specs
   and plans are the design record and the loop reads them.
+- One edit to `issue-to-pr`: a line under its hard rule pointing at `loop-issue`
+  as the unattended path, so a later reader does not "fix" the stop rule.
 - Root `AGENTS.md` holds the conventions. Root `CLAUDE.md` is a one-line file
   pointing at it — a real file, not a symlink, so it survives every checkout.
   `AGENTS.md` contents:
@@ -187,25 +232,30 @@ stopping condition. CI gains matching `lint` and `ui` jobs.
 
 ~1.5 agentic hours.
 
+- `.claude/skills/loop-pipeline/SKILL.md` — the shared lane mechanics, written
+  once here so `loop-watchdog` and `loop-issue` each stay a findings skill.
 - `.claude/agents/loop-drafter.md` — implements one finding. Tools: Read, Edit,
-  Write, Bash, Grep, Glob.
+  Write, Bash, Grep, Glob. Carries the deny-list above.
 - `.claude/agents/loop-verifier.md` — judges the diff against `AGENTS.md`, the
   project skills, and the tests. Tools: **Read, Grep, Bash only.** It cannot
   edit, so it structurally cannot fix what it is judging. This is the article's
   ideate-vs-verify split, enforced by tool grants rather than by instruction.
+  Carries the deny-list above.
 - Worktree per finding: `git worktree add ../cccost-loop/<slug>`, removed on
   completion.
 - `.claude/settings.json` (committed): a Stop hook running `npm run verify`, and
   a PostToolUse hook on `web/src/**` writes that requires `test:ui`.
 
 **Verify:** dry run against a synthetic finding produces a worktree, a draft PR,
-and a verifier verdict, with no write outside the worktree.
+and a verifier verdict, with no write outside the worktree. Confirm the verifier
+cannot edit: hand it a diff and check it reports rather than repairs.
 
 ## Phase 3 — watchdog lane and heartbeat
 
-~1.5 agentic hours.
+~1.5 agentic hours. Requires Phases 0-2.
 
-`.claude/skills/loop-watchdog/SKILL.md` checks, in order:
+`.claude/skills/loop-watchdog/SKILL.md` decides findings; `loop-pipeline` acts
+on them. Checks, in order:
 
 1. **New model IDs.** Every distinct model ID in `~/.claude/projects/**/*.jsonl`
    not in `test/fixtures/known-models.json`. Reports the ID, message count, and
@@ -229,6 +279,7 @@ exactly one issue and appends one log entry; second run files zero.
 
 ~1.5 agentic hours. Requires Phases 0-2.
 
+Writes `.claude/skills/loop-issue/SKILL.md` and
 `.github/workflows/loop-issue.yml`, using `anthropics/claude-code-action`:
 
 ```yaml
@@ -253,7 +304,8 @@ Workflow shape:
 - checkout, node 20, `npm --prefix web ci`, `npm run build`
 - `npx playwright install --with-deps chromium` (the UI gate needs a browser)
 - run the action with `claude_code_oauth_token`, a `prompt` that names
-  `.claude/skills/issue-to-pr/SKILL.md` and the two agent files by path
+  `.claude/skills/loop-issue/SKILL.md`, `.claude/skills/loop-pipeline/SKILL.md`
+  and the two agent files by path
 - permissions: `contents: write`, `pull-requests: write`, `issues: write`
 - concurrency group keyed on the issue number, so relabelling cannot start a
   second run against the same issue

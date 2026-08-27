@@ -209,15 +209,18 @@ calls. Your `config.json` is gitignored.
 ## Testing
 
 ```sh
+npm run verify  # the gate: build + lint + test + test:ui
 npm test        # node --test — pure aggregation logic in lib/core.js
+npm run test:ui # Playwright, against a built web/dist
 ```
 
 ## Contributing
 
 Issues and PRs welcome. Keep the backend dependency-free (`lib/core.js` and
-`server.js` use only Node built-ins) and add a test in `test/core.test.js` for any
-change to cost math or aggregation. See [docs/DESIGN.md](docs/DESIGN.md) for how
-the cost model, dedup, subagent merge, and advisor work.
+`server.js` use only Node built-ins) and add a test under `test/` (e.g.
+`test/core.test.js`) for any change to cost math or aggregation. See
+[docs/DESIGN.md](docs/DESIGN.md) for how the cost model, dedup, subagent merge,
+and advisor work.
 
 ## Roadmap
 

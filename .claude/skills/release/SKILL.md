@@ -25,7 +25,7 @@ Create a todo per item. Do not skip items — v2.2.0 shipped with no git tag and
 git status --short                 # must be clean
 git rev-parse --abbrev-ref HEAD    # must be master
 git pull --ff-only
-npm --prefix web ci && npm run build && npm test
+npm --prefix web ci && npm run verify
 ```
 
 Working tree dirty or tests red → stop and report. Never release over uncommitted changes.

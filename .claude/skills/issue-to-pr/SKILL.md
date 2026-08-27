@@ -133,8 +133,9 @@ code's style; touch only what the issue requires.
 
 ```bash
 npm --prefix web ci     # only when web/ is touched
-npm run build
-npm test
+npm ci                  # only when root deps changed
+npx playwright install --with-deps chromium   # first run only
+npm run verify          # build + lint + test + test:ui — CI's actual gate
 ```
 
 `superpowers:verification-before-completion` applies: paste the output. "Tests pass"

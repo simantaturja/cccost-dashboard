@@ -955,11 +955,23 @@ Create `.claude/settings.json`:
   "hooks": {
     "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "npm run lint --silent"
+            "command": "npm run lint --silent",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "in=$(cat); f=$(jq -r '.tool_input.file_path // \"\"' <<<\"$in\"); case \"$f\" in *–/web/src/*) echo 'web/src changed — npm run test:ui must pass before this is done.' ;; esac; exit 0",
+            "timeout": 10
           }
         ]
       }
@@ -968,13 +980,25 @@ Create `.claude/settings.json`:
 }
 ```
 
-The Stop hook runs the cheap half of the gate on every stop. `npm run verify`
-is not used here — it boots a browser, which is too slow for a stop hook. The
-full gate runs in `loop-pipeline` step 4 and in CI.
+Note the shape difference, which is verified rather than assumed: **`Stop` takes
+no `matcher`** — only `PostToolUse` and `PermissionRequest` do. A `matcher` key
+on a `Stop` entry is wrong. The `PostToolUse` matcher matches **tool names**,
+not paths, so the path test happens inside the command by reading the hook's
+JSON on stdin.
 
-If the running Claude Code version rejects this schema, run
-`/update-config` or consult `/help` for the current hooks shape rather than
-guessing — and correct this file to match.
+The Stop hook runs only the cheap half of the gate. `npm run verify` is not used
+here — it boots a browser, which is far too slow to run on every stop. The full
+gate runs in `loop-pipeline` step 4 and in CI.
+
+- [ ] **Step 3b: Fix the placeholder in the PostToolUse pattern**
+
+The `case` pattern above contains a literal `–` placeholder so it cannot silently
+match everything if copied wrong. Replace `*–/web/src/*` with `*/web/src/*`, then
+verify the hook fires:
+
+Run: `echo '{"tool_input":{"file_path":"/x/web/src/App.jsx"}}' | jq -r '.tool_input.file_path'`
+Expected: `/x/web/src/App.jsx`. Then edit any file under `web/src/` in a session
+and confirm the reminder appears; edit a file under `lib/` and confirm it does not.
 
 - [ ] **Step 4: Verify the agents are visible**
 
@@ -999,6 +1023,25 @@ git commit -m "feat(loop): add loop-drafter and loop-verifier agents"
 ```
 
 ---
+
+## Deviations from the spec
+
+Two, both forced by things found while writing this plan rather than by
+preference. Both are worth a look before execution starts.
+
+1. **Playwright specs live in `e2e/`, not `test/ui/`.** The spec put them under
+   `test/ui/`. `node --test` executes every `.js` file under `test/` — verified
+   empirically — so a spec placed there is run by `npm test`, outside Playwright,
+   and fails.
+
+2. **No committed screenshot baselines in this phase.** The spec called for
+   baselines under `test/ui/__screenshots__/`. The dashboard renders
+   date-dependent views (`localDate` buckets by machine timezone, and the report
+   month defaults to the current month), so pixel baselines would drift on a
+   calendar boundary and produce failures unrelated to any change. This phase
+   gates on DOM assertions plus zero console/page errors in both colour schemes,
+   which catches the regressions that matter without the churn. Pixel baselines
+   can be added later against a frozen clock.
 
 ## Done when
 

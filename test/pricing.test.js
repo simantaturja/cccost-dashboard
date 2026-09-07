@@ -15,6 +15,7 @@ const known = JSON.parse(
 const EXPECTED_INPUT = {
   'claude-opus-5': 5,
   'claude-opus-4-8': 5,
+  'claude-fable-5-1': 10,
   'claude-fable-5': 10,
   'claude-mythos-5': 10,
   'claude-sonnet-5': 2,
@@ -53,8 +54,24 @@ test('cache rates hold their multiples of the input rate', () => {
     const r = getRates(id);
     assert.strictEqual(r.write5m, r.input * 1.25, `${id} 5m cache-write multiple`);
     assert.strictEqual(r.write1h, r.input * 2, `${id} 1h cache-write multiple`);
-    assert.ok(Math.abs(r.read - r.input * 0.1) < 1e-9, `${id} cache-read multiple`);
+    // Published footnote: cache hits on Fable 5.1 are 0.025x base input; all others 0.1x.
+    const readMultiple = id.includes('fable-5-1') ? 0.025 : 0.1;
+    assert.ok(Math.abs(r.read - r.input * readMultiple) < 1e-9, `${id} cache-read multiple`);
   }
+});
+
+// Fable 5.1 shares every rate with Fable 5 except cache read (0.025x instead of
+// 0.1x). Its ID substring-matches 'fable-5', so it needs its own row placed
+// first — and adding that row must not reprice the older ID.
+test('fable 5.1 has its own cache-read rate and leaves fable 5 alone', () => {
+  assert.deepStrictEqual(getRates('claude-fable-5-1'), {
+    input: 10,
+    output: 50,
+    write5m: 12.5,
+    write1h: 20,
+    read: 0.25,
+  });
+  assert.strictEqual(getRates('claude-fable-5').read, 1);
 });
 
 // Opus fast mode is billed at premium rates across the whole context window —

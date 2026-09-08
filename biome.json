@@ -6,6 +6,7 @@
       "!**/web/dist",
       "!**/demo",
       "!**/extension/out",
+      "!**/extension/media",
       "!**/node_modules",
       "!**/test-results",
       "!**/playwright-report"

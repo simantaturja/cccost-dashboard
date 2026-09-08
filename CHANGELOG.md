@@ -4,6 +4,14 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.3.1] - 2026-09-08
+
+### Fixed
+- Claude Fable 5.1 sessions are now priced. The model matched no pricing entry,
+  so every Fable 5.1 message was counted at $0 and listed under unknown models.
+  It bills at the Fable 5 rates, with the cheaper 0.025x cache-read rate that
+  Fable 5.1 actually charges.
+
 ## [2.3.0] - 2026-08-25
 
 ### Fixed

@@ -147,7 +147,9 @@ from, or at `~/.config/cccost-dashboard/config.json`:
 ```
 
 - `subscriptionUSDPerMonth` — your plan price, used for the plan-ROI figure.
-- With no `config.json`, ROI uses a $200 default.
+- Without it, the plan is detected from Claude Code's account profile in
+  `~/.claude.json` (Pro, Max 5x/20x, Team) and priced at US monthly list price.
+  If that fails, ROI uses a $200 default.
 
 ## Features
 

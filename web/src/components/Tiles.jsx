@@ -51,7 +51,8 @@ export default function Tiles({ summary, roi }) {
               <span className="max-w-[20ch] text-right text-xs leading-[1.4] text-muted">
                 return on your{' '}
                 <b className="font-semibold text-ink">${roi.subscriptionUSDPerMonth}/mo</b> plan
-                {!roi.configured && ' (default)'}
+                {roi.source === 'default' && ' (default)'}
+                {roi.source === 'detected' && ` (detected: ${roi.planLabel})`}
               </span>
             </div>
             <div className="value-scale relative h-3 overflow-hidden rounded-[3px]">
@@ -76,7 +77,9 @@ export default function Tiles({ summary, roi }) {
               {last.multiple.toFixed(1)}× what you paid.
               {!roi.configured && (
                 <span className="mt-1 block text-[11.5px] text-faint">
-                  Multiple assumes a ${roi.subscriptionUSDPerMonth}/mo plan — set
+                  {roi.source === 'detected'
+                    ? 'Plan read from your Claude Code account at list price — set'
+                    : `Multiple assumes a $${roi.subscriptionUSDPerMonth}/mo plan — set`}{' '}
                   subscriptionUSDPerMonth in config.json to match yours.
                 </span>
               )}

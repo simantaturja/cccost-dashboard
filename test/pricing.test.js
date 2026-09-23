@@ -13,6 +13,7 @@ const known = JSON.parse(
 // derived, so a new PRICING entry that steals an existing ID's substring match
 // fails here instead of silently repricing it.
 const EXPECTED_INPUT = {
+  'claude-opus-5-5': 4,
   'claude-opus-5': 5,
   'claude-opus-4-8': 5,
   'claude-fable-5-1': 10,
@@ -54,8 +55,9 @@ test('cache rates hold their multiples of the input rate', () => {
     const r = getRates(id);
     assert.strictEqual(r.write5m, r.input * 1.25, `${id} 5m cache-write multiple`);
     assert.strictEqual(r.write1h, r.input * 2, `${id} 1h cache-write multiple`);
-    // Published footnote: cache hits on Fable 5.1 are 0.025x base input; all others 0.1x.
-    const readMultiple = id.includes('fable-5-1') ? 0.025 : 0.1;
+    // Published footnotes: cache hits are 0.025x base input on Fable 5.1, 0.05x on
+    // Opus 5.5; all others 0.1x.
+    const readMultiple = id.includes('fable-5-1') ? 0.025 : id.includes('opus-5-5') ? 0.05 : 0.1;
     assert.ok(Math.abs(r.read - r.input * readMultiple) < 1e-9, `${id} cache-read multiple`);
   }
 });
@@ -72,6 +74,27 @@ test('fable 5.1 has its own cache-read rate and leaves fable 5 alone', () => {
     read: 0.25,
   });
   assert.strictEqual(getRates('claude-fable-5').read, 1);
+});
+
+// Opus 5.5 is cheaper than the generic opus tier, with a 0.05x cache-read rate.
+// Its ID contains 'opus', so it needs its own row placed first. Fast mode is
+// 2x standard, with the cache multipliers stacked on top.
+test('opus 5.5 has its own standard and fast rates and leaves opus 5 alone', () => {
+  assert.deepStrictEqual(getRates('claude-opus-5-5'), {
+    input: 4,
+    output: 20,
+    write5m: 5,
+    write1h: 8,
+    read: 0.2,
+  });
+  assert.deepStrictEqual(getRates('claude-opus-5-5', 'fast'), {
+    input: 8,
+    output: 40,
+    write5m: 10,
+    write1h: 16,
+    read: 0.4,
+  });
+  assert.strictEqual(getRates('claude-opus-5').input, 5);
 });
 
 // Opus fast mode is billed at premium rates across the whole context window —

@@ -4,6 +4,20 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.4.0] - 2026-09-24
+
+### Added
+- The plan-ROI multiple now detects your subscription from your Claude Code
+  account instead of assuming $200. Pro, Max 5x, Max 20x, and Team Standard or
+  Premium seats are priced at US monthly list price, and the Overview shows
+  "(detected: <plan>)". A `subscriptionUSDPerMonth` in `config.json` still takes
+  precedence; unrecognised or Enterprise accounts keep the $200 default.
+
+### Fixed
+- Claude Opus 5.5 sessions were priced at the older Opus rates ($5/$25 per
+  million tokens) with no warning. They now bill at Opus 5.5's own $4/$20 rates,
+  with its 0.05x cache-read rate.
+
 ## [2.3.1] - 2026-09-08
 
 ### Fixed
